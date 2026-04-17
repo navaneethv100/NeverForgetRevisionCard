@@ -1,0 +1,118 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  name         String
+  examDate     DateTime? @map("exam_date")
+  examName     String?   @map("exam_name")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  notes       Note[]
+  cards       Card[]
+  memoryStates CardMemoryState[]
+  reviewLogs  ReviewLog[]
+  streak      UserStreak?
+
+  @@map("users")
+}
+
+model Note {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  subject    String
+  topic      String
+  concept    String
+  rawContent String   @map("raw_content")
+  sourceType String   @map("source_type") // text | url | youtube
+  sourceUrl  String?  @map("source_url")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cards Card[]
+
+  @@map("notes")
+}
+
+model Card {
+  id            Int      @id @default(autoincrement())
+  noteId        Int      @map("note_id")
+  userId        Int      @map("user_id")
+  cardType      String   @map("card_type") // flashcard | mcq
+  front         String?
+  hint          String?
+  back          String?
+  options       String?  // JSON string for MCQ options
+  correctOption String?  @map("correct_option")
+  explanation   String?
+  subject       String
+  topic         String
+  concept       String
+  aiGenerated   Boolean  @default(true) @map("ai_generated")
+  verified      Boolean  @default(false)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  note        Note             @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  memoryState CardMemoryState?
+  reviewLogs  ReviewLog[]
+
+  @@map("cards")
+}
+
+model CardMemoryState {
+  id             Int       @id @default(autoincrement())
+  cardId         Int       @unique @map("card_id")
+  userId         Int       @map("user_id")
+  stability      Float     @default(0.0)
+  difficulty     Float     @default(0.3)
+  retrievability Float     @default(0.0)
+  nextReviewDate DateTime? @map("next_review_date")
+  reviewCount    Int       @default(0) @map("review_count")
+  lastReviewedAt DateTime? @map("last_reviewed_at")
+
+  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("card_memory_states")
+}
+
+model ReviewLog {
+  id              Int      @id @default(autoincrement())
+  cardId          Int      @map("card_id")
+  userId          Int      @map("user_id")
+  rating          String   // again | hard | good | easy
+  responseTimeMs  Int      @default(5000) @map("response_time_ms")
+  stabilityAfter  Float    @default(0.0) @map("stability_after")
+  difficultyAfter Float    @default(0.3) @map("difficulty_after")
+  intervalDays    Float    @default(1.0) @map("interval_days")
+  reviewedAt      DateTime @default(now()) @map("reviewed_at")
+
+  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("review_logs")
+}
+
+model UserStreak {
+  id              Int       @id @default(autoincrement())
+  userId          Int       @unique @map("user_id")
+  currentStreak   Int       @default(0) @map("current_streak")
+  longestStreak   Int       @default(0) @map("longest_streak")
+  lastReviewDate  DateTime? @map("last_review_date")
+  totalReviewDays Int       @default(0) @map("total_review_days")
+  reviewsToday    Int       @default(0) @map("reviews_today")
+  todayDate       DateTime? @map("today_date")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_streaks")
+}
