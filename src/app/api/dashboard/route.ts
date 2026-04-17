@@ -3,7 +3,7 @@ import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { calculateRetrievability } from "@/lib/fsrs";
 import { getStreakInfo } from "@/lib/streak-service";
-import { NEW_CARDS_PER_DAY, REVIEW_CARDS_LIMIT } from "@/lib/session-config";
+import { REVIEW_CARDS_LIMIT } from "@/lib/session-config";
 import { UPSC_SYLLABUS } from "@/lib/ai-service";
 
 export async function GET(req: NextRequest) {

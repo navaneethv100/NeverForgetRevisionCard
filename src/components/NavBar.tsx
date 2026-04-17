@@ -344,25 +344,42 @@ export default function NavBar() {
         </div>
       </nav>
 
-      {/* ── Sidebar overlay (LEFT side) ── */}
-      {sidebarOpen && (
+      {/* Hover trigger strip — invisible strip on the left edge that opens the sidebar */}
+      {!sidebarOpen && (
         <div
-          onClick={(e) => { if (e.target === e.currentTarget) setSidebarOpen(false); }}
           style={{
             position: "fixed",
-            inset: 0,
-            zIndex: 100,
-            background: "var(--nf-overlay)",
-            backdropFilter: "blur(4px)",
-            WebkitBackdropFilter: "blur(4px)",
-            animation: "qmFadeIn 0.14s ease",
+            left: 0,
+            top: 56,
+            bottom: 0,
+            width: 8,
+            zIndex: 99,
+            cursor: "pointer",
           }}
-        >
-          {/* Sidebar panel — left side */}
+          onMouseEnter={() => setSidebarOpen(true)}
+        />
+      )}
+
+      {/* ── Floating Sidebar ── */}
+      {sidebarOpen && (
+        <>
+          {/* Light backdrop — closes sidebar on click outside */}
+          <div
+            onClick={() => setSidebarOpen(false)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 100,
+              background: "rgba(0,0,0,0.08)",
+            }}
+          />
+
+          {/* Sidebar panel */}
           <div
             className="nf-sidebar-enter"
+            onMouseLeave={() => setSidebarOpen(false)}
             style={{
-              position: "absolute",
+              position: "fixed",
               top: 0,
               left: 0,
               bottom: 0,
@@ -374,6 +391,7 @@ export default function NavBar() {
               display: "flex",
               flexDirection: "column",
               overflow: "hidden",
+              zIndex: 101,
             }}
           >
             {/* Sidebar header */}
@@ -552,7 +570,7 @@ export default function NavBar() {
               </button>
             </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* Settings Modal */}
