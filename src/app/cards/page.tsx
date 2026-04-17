@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import NavBar from "@/components/NavBar";
+import { Icon } from "@iconify/react";
 
 interface Card {
   id: number;
@@ -32,21 +33,20 @@ export default function CardsPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<number | null>(null);
 
-  const token = typeof window !== "undefined" ? localStorage.getItem("nf_token") : null;
-
   // Fetch all cards once — filtering is done client-side
   const fetchCards = useCallback(async () => {
+    const token = localStorage.getItem("nf_token");
     if (!token) { router.push("/login"); return; }
     setLoading(true);
     try {
       const res = await fetch("/api/cards", { headers: { Authorization: `Bearer ${token}` } });
-      if (res.status === 401) { router.push("/login"); return; }
+      if (res.status === 401) { localStorage.removeItem("nf_token"); localStorage.removeItem("nf_user"); router.push("/login"); return; }
       const data = await res.json();
       setAllCards(data.cards || []);
     } finally {
       setLoading(false);
     }
-  }, [token, router]);
+  }, [router]);
 
   useEffect(() => {
     const saved = localStorage.getItem("nf_theme");
@@ -97,6 +97,7 @@ export default function CardsPage() {
 
   async function handleSaveEdit() {
     if (!editCard) return;
+    const token = localStorage.getItem("nf_token");
     setSaving(true);
     try {
       const res = await fetch(`/api/cards/${editCard.id}`, {
@@ -123,6 +124,7 @@ export default function CardsPage() {
 
   async function handleDelete(id: number) {
     if (!confirm("Delete this card?")) return;
+    const token = localStorage.getItem("nf_token");
     setDeleting(id);
     try {
       await fetch(`/api/cards/${id}`, {
@@ -153,7 +155,7 @@ export default function CardsPage() {
       <NavBar />
       <main className="max-w-5xl mx-auto px-4 py-8 space-y-6">
         <div>
-          <h1 className="text-2xl font-bold" style={{ fontFamily: "'Bricolage Grotesque', sans-serif", color: "var(--nf-text)" }}>
+          <h1 className="text-2xl font-bold" style={{ fontFamily: "'Poppins', sans-serif", color: "var(--nf-text)" }}>
             My Cards
           </h1>
           <p className="text-sm mt-0.5" style={{ color: "var(--nf-text-3)" }}>
@@ -241,13 +243,13 @@ export default function CardsPage() {
 
       {/* Edit Modal */}
       {editCard && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto" style={{ background: "var(--nf-overlay)" }}>
-          <div className="w-full max-w-lg rounded-2xl p-6 space-y-4 my-4" style={{ background: "var(--nf-card)", border: "1px solid var(--nf-border)" }}>
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold" style={{ color: "var(--nf-text)" }}>
+        <div className="qm-overlay">
+          <div className="qm-card" style={{ maxWidth: 512 }}>
+            <button className="qm-close" onClick={() => setEditCard(null)}><Icon icon="hugeicons:cancel-01" width={16} /></button>
+            <div style={{ marginBottom: 20 }}>
+              <h3 className="font-semibold" style={{ color: "var(--nf-text)", fontSize: "1.05rem" }}>
                 Edit {editCard.card_type === "flashcard" ? "Flashcard" : "MCQ"}
               </h3>
-              <button onClick={() => setEditCard(null)} style={{ color: "var(--nf-text-3)" }}>✕</button>
             </div>
 
             {editCard.card_type === "flashcard" ? (
@@ -282,11 +284,11 @@ export default function CardsPage() {
               Mark as verified
             </label>
 
-            <div className="flex gap-2 pt-2">
-              <button onClick={() => setEditCard(null)} className="flex-1 py-2 rounded-xl text-sm"
+            <div className="flex gap-2 pt-4">
+              <button onClick={() => setEditCard(null)} className="flex-1 py-2.5 rounded-xl text-sm"
                 style={{ border: "1px solid var(--nf-border)", color: "var(--nf-text-2)" }}>Cancel</button>
-              <button onClick={handleSaveEdit} disabled={saving} className="flex-1 py-2 rounded-xl text-sm font-medium text-white"
-                style={{ background: "var(--nf-primary)" }}>{saving ? "Saving…" : "Save"}</button>
+              <button onClick={handleSaveEdit} disabled={saving} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white"
+                style={{ background: "var(--nf-primary)" }}>{saving ? "Saving…" : "Save Changes"}</button>
             </div>
           </div>
         </div>

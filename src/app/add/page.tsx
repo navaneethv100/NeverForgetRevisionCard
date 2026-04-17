@@ -3,10 +3,10 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import NavBar from "@/components/NavBar";
 import { UPSC_SYLLABUS_CLIENT } from "@/lib/syllabus-client";
+import { Icon } from "@iconify/react";
 
 type Tab = "text" | "url" | "youtube";
-type Phase = "input" | "loading" | "preview";
-type StepState = "idle" | "active" | "done";
+type Phase = "input" | "loading" | "success" | "preview";
 
 interface FlashCard { front: string; hint: string; back: string; }
 interface MCQ { question: string; options: Record<string, string>; correct_option: string; explanation: string; }
@@ -17,26 +17,12 @@ interface PreviewData {
   video_id?: string; video_title?: string; content_source?: string;
 }
 
-const STEPS: Record<Tab, { text: string; sub: string }[]> = {
-  text: [
-    { text: "Reading your content", sub: "Parsing and preparing text" },
-    { text: "Classifying subject & topic", sub: "AI is analysing the content domain" },
-    { text: "Generating flashcards", sub: "Creating active recall questions" },
-    { text: "Generating MCQs", sub: "Building UPSC-pattern questions" },
-  ],
-  url: [
-    { text: "Fetching webpage", sub: "Extracting clean text from URL" },
-    { text: "Classifying subject & topic", sub: "AI is analysing the content domain" },
-    { text: "Generating flashcards", sub: "Creating active recall questions" },
-    { text: "Generating MCQs", sub: "Building UPSC-pattern questions" },
-  ],
-  youtube: [
-    { text: "Analysing video", sub: "Extracting transcript or metadata" },
-    { text: "Classifying subject & topic", sub: "AI is analysing the content domain" },
-    { text: "Generating flashcards", sub: "Creating active recall questions" },
-    { text: "Generating MCQs", sub: "Building UPSC-pattern questions" },
-  ],
-};
+const STEPS = [
+  "Analyzing your content",
+  "Identifying key topics",
+  "Creating flashcards",
+  "Finalizing your set",
+];
 
 function extractYtId(url: string): string | null {
   const m = url.match(/(?:v=|\/v\/|youtu\.be\/|embed\/|live\/)([a-zA-Z0-9_-]{11})/);
@@ -54,10 +40,7 @@ export default function AddPage() {
   const [ytPreviewId, setYtPreviewId] = useState<string | null>(null);
 
   const [phase, setPhase] = useState<Phase>("input");
-  const [progress, setProgress] = useState(0);
-  const [stepStates, setStepStates] = useState<StepState[]>(["idle", "idle", "idle", "idle"]);
-  const [activeStepText, setActiveStepText] = useState("");
-  const [activeStepSub, setActiveStepSub] = useState("");
+  const [activeStep, setActiveStep] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [error, setError] = useState("");
@@ -78,45 +61,84 @@ export default function AddPage() {
     }, 50);
   }, [editIdx]);
 
-  const token = typeof window !== "undefined" ? localStorage.getItem("nf_token") : null;
-
   useEffect(() => {
+    const token = localStorage.getItem("nf_token");
     if (!token) { router.push("/login"); return; }
     const saved = localStorage.getItem("nf_theme");
     document.documentElement.classList.toggle("dark", saved === "dark");
-  }, [token, router]);
+
+    const params = new URLSearchParams(window.location.search);
+    const autoTab = params.get("tab") as Tab | null;
+    const isAuto = params.get("auto") === "1";
+
+    // Non-auto: just set the tab
+    if (autoTab && ["text", "url", "youtube"].includes(autoTab) && !isAuto) {
+      setTab(autoTab as Tab);
+      return;
+    }
+
+    // Auto-mode: skip input screen, go straight to processing
+    if (!autoTab || !["text", "url", "youtube"].includes(autoTab) || !isAuto) return;
+
+    const stored = sessionStorage.getItem("nf_modal_input");
+    if (!stored) return;
+    sessionStorage.removeItem("nf_modal_input");
+
+    let input: { type: string; content?: string; url?: string };
+    try { input = JSON.parse(stored); } catch { return; }
+
+    const t = autoTab as Tab;
+    setTab(t);
+    setPhase("loading");
+    setActiveStep(0);
+
+    let stepIdx = 0;
+    intervalRef.current = setInterval(() => {
+      stepIdx++;
+      if (stepIdx < STEPS.length) setActiveStep(stepIdx);
+    }, 5000);
+
+    (async () => {
+      try {
+        let endpoint = "", body: Record<string, string> = {};
+        if (t === "text") { endpoint = "/api/ingest/text"; body = { text: input.content || "" }; }
+        else if (t === "url") { endpoint = "/api/ingest/url"; body = { url: input.url || "" }; }
+        else { endpoint = "/api/ingest/youtube"; body = { url: input.url || "" }; }
+
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Processing failed");
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        await new Promise((r) => setTimeout(r, 400));
+        setPreview(data);
+        setPhase("success");
+      } catch (e: unknown) {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        setError(e instanceof Error ? e.message : "Something went wrong");
+      }
+    })();
+  }, [router]);
 
   useEffect(() => {
     const id = extractYtId(ytUrl);
     setYtPreviewId(id);
   }, [ytUrl]);
 
-  function startLoadingAnimation(t: Tab) {
-    const steps = STEPS[t];
-    setProgress(0);
-    setStepStates(["idle", "idle", "idle", "idle"]);
+  function startLoadingAnimation() {
+    setActiveStep(0);
     let idx = 0;
-    const PCTS = [12, 38, 62, 85];
-    function advance() {
-      if (idx >= steps.length) return;
-      setProgress(PCTS[idx]);
-      setActiveStepText(steps[idx].text);
-      setActiveStepSub(steps[idx].sub);
-      setStepStates((prev) => prev.map((s, i) => {
-        if (i < idx) return "done";
-        if (i === idx) return "active";
-        return "idle";
-      }));
+    intervalRef.current = setInterval(() => {
       idx++;
-    }
-    advance();
-    intervalRef.current = setInterval(advance, 5000);
+      if (idx < STEPS.length) setActiveStep(idx);
+    }, 5000);
   }
 
   function stopLoadingAnimation() {
     if (intervalRef.current) clearInterval(intervalRef.current);
-    setProgress(100);
-    setStepStates(["done", "done", "done", "done"]);
   }
 
   async function handleGenerate() {
@@ -126,7 +148,7 @@ export default function AddPage() {
     setShowTranscript(false);
     setPhase("loading");
     topRef.current?.scrollIntoView({ behavior: "smooth" });
-    startLoadingAnimation(tab);
+    startLoadingAnimation();
 
     try {
       let endpoint = "", body = {};
@@ -134,6 +156,7 @@ export default function AddPage() {
       else if (tab === "url") { endpoint = "/api/ingest/url"; body = { url }; }
       else { endpoint = "/api/ingest/youtube"; body = { url: ytUrl }; }
 
+      const token = localStorage.getItem("nf_token");
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -144,12 +167,29 @@ export default function AddPage() {
       stopLoadingAnimation();
       await new Promise((r) => setTimeout(r, 400));
       setPreview(data);
-      setPhase("preview");
+      setPhase("success");
     } catch (e: unknown) {
       stopLoadingAnimation();
       setError(e instanceof Error ? e.message : "Something went wrong");
-      setPhase("input");
     }
+  }
+
+  async function handleStartRevision() {
+    if (!preview) { router.push("/session"); return; }
+    if (!saved) {
+      setSaving(true);
+      try {
+        const token = localStorage.getItem("nf_token");
+        const res = await fetch("/api/ingest/save", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify(preview),
+        });
+        if (res.ok) setSaved(true);
+      } catch { /* still navigate */ }
+      finally { setSaving(false); }
+    }
+    router.push("/session");
   }
 
   async function handleGenerateMore() {
@@ -160,6 +200,7 @@ export default function AddPage() {
         ...preview.flashcards.map((f) => f.front),
         ...preview.mcqs.map((m) => m.question),
       ];
+      const token = localStorage.getItem("nf_token");
       const res = await fetch("/api/ingest/generate-more", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -189,6 +230,7 @@ export default function AddPage() {
     if (!preview) return;
     setSaving(true);
     try {
+      const token = localStorage.getItem("nf_token");
       const res = await fetch("/api/ingest/save", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -205,10 +247,14 @@ export default function AddPage() {
   }
 
   function handleCancel() {
-    setPreview(null);
     setError("");
-    setShowTranscript(false);
-    setPhase("input");
+    if (preview) {
+      setPhase("success");
+    } else {
+      setPreview(null);
+      setShowTranscript(false);
+      setPhase("input");
+    }
   }
 
   function openEdit(type: "fc" | "mcq", idx: number) {
@@ -270,6 +316,177 @@ export default function AddPage() {
 
   const totalCards = preview ? preview.flashcards.length + preview.mcqs.length : 0;
 
+  /* ── Success screen ── */
+  if (phase === "success" && preview) {
+    const successSteps = [
+      `${preview.flashcards.length} flashcard${preview.flashcards.length !== 1 ? "s" : ""} created`,
+      `${preview.mcqs.length} MCQ${preview.mcqs.length !== 1 ? "s" : ""} created`,
+      "Spaced repetition scheduled",
+      `${totalCards} cards ready to practice`,
+    ];
+    return (
+      <div style={{ minHeight: "100svh", background: "var(--nf-bg)", display: "flex", flexDirection: "column" }}>
+        <NavBar />
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "52px 16px 44px" }}>
+
+          {/* Hero icon — static, green tint */}
+          <div style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
+            <div className="ls-hero-glow" />
+            <div style={{ position: "relative", zIndex: 1, width: 56, height: 56, borderRadius: "50%", background: "#10b981", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 0 5px var(--nf-bg), 0 0 0 7px #10b981" }}>
+              <Icon icon="hugeicons:checkmark-circle-01" width={28} />
+            </div>
+          </div>
+
+          <p style={{ fontFamily: "'Lato', sans-serif", fontSize: "0.875rem", fontWeight: 500, color: "var(--nf-text-3)", margin: "0 0 6px" }}>
+            Cards are ready
+          </p>
+          <h2 style={{ fontFamily: "'Poppins', sans-serif", fontSize: "clamp(1.2rem, 4vw, 1.5rem)", fontWeight: 600, color: "var(--nf-text)", margin: 0, lineHeight: 1.3, letterSpacing: "-0.01em" }}>
+            Your revision set is prepared
+          </h2>
+
+          {/* Card stack — all done */}
+          <div style={{ position: "relative", width: 270, height: 340, margin: "40px auto 0" }}>
+            <div style={{ position: "absolute", inset: 0, borderRadius: 28, border: "2px dashed rgba(16,185,129,0.25)", transform: "rotate(-4deg) translate(-6px, 4px)" }} />
+            <div style={{ position: "absolute", inset: 0, borderRadius: 28, border: "2px dashed rgba(16,185,129,0.25)", transform: "rotate(3deg) translate(4px, 2px)" }} />
+            <div style={{ position: "absolute", inset: 0, borderRadius: 28, border: "2px dashed rgba(16,185,129,0.5)", background: "var(--nf-card)", overflow: "hidden" }}>
+              <div style={{
+                position: "absolute", left: 0, right: 0, top: 0,
+                display: "flex", flexDirection: "column",
+                transform: `translateY(calc(50% - ${(successSteps.length - 1) * 72 + 36}px))`,
+              }}>
+                {successSteps.map((label, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, height: 72, padding: "0 28px", flexShrink: 0 }}>
+                    <div style={{ width: 24, height: 24, borderRadius: "50%", background: "rgba(16,185,129,0.8)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>✓</div>
+                    <span style={{ fontFamily: "'Poppins', sans-serif", fontSize: 15, fontWeight: 600, lineHeight: 1.3, letterSpacing: "-0.01em", color: "var(--nf-text-3)", textAlign: "left" }}>
+                      {label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ pointerEvents: "none", position: "absolute", inset: 0, background: "linear-gradient(to bottom, var(--nf-card) 0%, transparent 32%, transparent 68%, var(--nf-card) 100%)" }} />
+            </div>
+          </div>
+
+          {/* CTAs */}
+          <div style={{ marginTop: 36, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+            <button
+              onClick={handleStartRevision}
+              disabled={saving}
+              style={{ fontFamily: "'Poppins', sans-serif", fontSize: "0.95rem", fontWeight: 600, background: "#10b981", color: "#fff", border: "none", borderRadius: 14, padding: "14px 40px", cursor: saving ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 8, boxShadow: "0 4px 20px rgba(16,185,129,0.3)", opacity: saving ? 0.75 : 1 }}
+            >
+              <Icon icon="hugeicons:play" width={18} />
+              {saving ? "Saving…" : "Start Revision"}
+            </button>
+            <button
+              onClick={() => setPhase("preview")}
+              style={{ fontFamily: "'Poppins', sans-serif", fontSize: "0.875rem", fontWeight: 500, background: "transparent", color: "var(--nf-text-3)", border: "1.5px solid var(--nf-border)", borderRadius: 14, padding: "12px 32px", cursor: "pointer" }}
+            >
+              Manage Flashcards
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Full-page loading screen (no card/shadow) ── */
+  if (phase === "loading") {
+    return (
+      <div style={{ minHeight: "100svh", background: "var(--nf-bg)", display: "flex", flexDirection: "column" }}>
+        <NavBar />
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "52px 16px 44px" }}>
+
+          {error ? (
+            /* ── Error state on processing screen ── */
+            <>
+              <div style={{ width: 56, height: 56, borderRadius: "50%", background: "var(--nf-error-bg)", border: "2px solid var(--nf-error-border)", color: "var(--nf-error-text)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
+                <Icon icon="hugeicons:alert-02" width={26} />
+              </div>
+              <p style={{ fontFamily: "'Lato', sans-serif", fontSize: "0.875rem", fontWeight: 500, color: "var(--nf-text-3)", margin: "0 0 6px" }}>
+                Something went wrong
+              </p>
+              <h2 style={{ fontFamily: "'Poppins', sans-serif", fontSize: "clamp(1.1rem, 4vw, 1.35rem)", fontWeight: 600, color: "var(--nf-text)", margin: "0 0 12px", lineHeight: 1.3 }}>
+                Could not generate your cards
+              </h2>
+              <p style={{ fontFamily: "'Lato', sans-serif", fontSize: "0.875rem", color: "var(--nf-error-text)", background: "var(--nf-error-bg)", border: "1px solid var(--nf-error-border)", borderRadius: 12, padding: "10px 18px", maxWidth: 380, margin: "0 auto 28px" }}>
+                {error}
+              </p>
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
+                <button
+                  onClick={() => { setError(""); setPhase("input"); }}
+                  style={{ fontFamily: "'Poppins', sans-serif", fontSize: "0.9rem", fontWeight: 600, background: "var(--nf-primary)", color: "#fff", border: "none", borderRadius: 12, padding: "12px 28px", cursor: "pointer" }}
+                >
+                  Try Again
+                </button>
+                <button
+                  onClick={() => router.push("/")}
+                  style={{ fontFamily: "'Poppins', sans-serif", fontSize: "0.9rem", fontWeight: 500, background: "var(--nf-card-alt)", color: "var(--nf-text-2)", border: "1px solid var(--nf-border)", borderRadius: 12, padding: "12px 28px", cursor: "pointer" }}
+                >
+                  Back to Home
+                </button>
+              </div>
+            </>
+          ) : (
+            /* ── Processing animation ── */
+            <>
+              {/* Hero icon with glow */}
+              <div style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
+                <div className="ls-hero-glow" />
+                <div style={{ position: "relative", zIndex: 1, width: 56, height: 56, borderRadius: "50%", background: "#4F5BD5", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 0 5px var(--nf-bg), 0 0 0 7px #4F5BD5" }}>
+                  <Icon icon="hugeicons:magic-wand-01" width={26} />
+                </div>
+              </div>
+
+              <p style={{ fontFamily: "'Lato', sans-serif", fontSize: "0.875rem", fontWeight: 500, color: "var(--nf-text-3)", margin: "0 0 6px" }}>
+                Just a moment…
+              </p>
+              <h2 style={{ fontFamily: "'Poppins', sans-serif", fontSize: "clamp(1.2rem, 4vw, 1.5rem)", fontWeight: 600, color: "var(--nf-text)", margin: 0, lineHeight: 1.3, letterSpacing: "-0.01em" }}>
+                Your revision is being prepared
+              </h2>
+
+              {/* Card stack illustration */}
+              <div style={{ position: "relative", width: 270, height: 340, margin: "40px auto 0" }}>
+                <div style={{ position: "absolute", inset: 0, borderRadius: 28, border: "2px dashed rgba(79,91,213,0.25)", transform: "rotate(-4deg) translate(-6px, 4px)" }} />
+                <div style={{ position: "absolute", inset: 0, borderRadius: 28, border: "2px dashed rgba(79,91,213,0.25)", transform: "rotate(3deg) translate(4px, 2px)" }} />
+                <div style={{ position: "absolute", inset: 0, borderRadius: 28, border: "2px dashed rgba(79,91,213,0.55)", background: "var(--nf-card)", overflow: "hidden" }}>
+                  <div style={{
+                    position: "absolute", left: 0, right: 0, top: 0,
+                    display: "flex", flexDirection: "column",
+                    transform: `translateY(calc(50% - ${activeStep * 72 + 36}px))`,
+                    transition: activeStep === 0 ? "none" : "transform 0.7s ease-out",
+                  }}>
+                    {STEPS.map((stepText, i) => {
+                      const state = i < activeStep ? "done" : i === activeStep ? "active" : "pending";
+                      return (
+                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, height: 72, padding: "0 28px", flexShrink: 0 }}>
+                          {state === "done" ? (
+                            <div style={{ width: 24, height: 24, borderRadius: "50%", background: "rgba(79,91,213,0.8)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>✓</div>
+                          ) : state === "active" ? (
+                            <div className="ls-ic-spin" />
+                          ) : (
+                            <div style={{ width: 20, height: 20, borderRadius: "50%", border: "2.5px solid rgba(79,91,213,0.3)", flexShrink: 0, boxSizing: "border-box" as const }} />
+                          )}
+                          <span style={{ fontFamily: "'Poppins', sans-serif", fontSize: 15, fontWeight: 600, lineHeight: 1.3, letterSpacing: "-0.01em", color: state === "active" ? "var(--nf-text)" : "var(--nf-text-3)" }}>
+                            {stepText}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{ pointerEvents: "none", position: "absolute", inset: 0, background: "linear-gradient(to bottom, var(--nf-card) 0%, transparent 32%, transparent 68%, var(--nf-card) 100%)" }} />
+                </div>
+              </div>
+
+              <p style={{ marginTop: 28, fontFamily: "'Lato', sans-serif", fontSize: "0.68rem", fontWeight: 600, letterSpacing: "0.18em", textTransform: "uppercase", color: "var(--nf-text-4)" }}>
+                Generating your cards
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ minHeight: "100vh", background: "var(--nf-bg)" }}>
       <NavBar />
@@ -280,11 +497,13 @@ export default function AddPage() {
 
         {/* Header */}
         <div>
-          <h1 className="text-2xl font-bold" style={{ fontFamily: "'Bricolage Grotesque', sans-serif", color: "var(--nf-text)" }}>
-            Add Content
+          <h1 className="text-2xl font-bold" style={{ fontFamily: "'Poppins', sans-serif", color: "var(--nf-text)" }}>
+            {phase === "preview" ? "Manage Cards" : "Add Content"}
           </h1>
           <p className="text-sm mt-0.5" style={{ color: "var(--nf-text-3)" }}>
-            Paste text, a URL, or a YouTube link — AI generates study cards instantly
+            {phase === "preview"
+              ? `${totalCards} card${totalCards !== 1 ? "s" : ""} generated — edit, add more, or save`
+              : "Paste text, a URL, or a YouTube link — AI generates study cards instantly"}
           </p>
         </div>
 
@@ -299,7 +518,10 @@ export default function AddPage() {
                   style={tab === t
                     ? { borderBottomColor: "var(--nf-accent)", color: "var(--nf-accent)" }
                     : { borderBottomColor: "transparent", color: "var(--nf-text-3)" }}>
-                  {t === "text" ? "📝 Paste Text" : t === "url" ? "🔗 Website URL" : "▶️ YouTube"}
+                  <span className="flex items-center justify-center gap-1.5">
+                    <Icon icon={t === "text" ? "hugeicons:sticky-note-01" : t === "url" ? "hugeicons:link-01" : "hugeicons:youtube"} width={14} />
+                    {t === "text" ? "Paste Text" : t === "url" ? "Website URL" : "YouTube"}
+                  </span>
                 </button>
               ))}
             </div>
@@ -362,8 +584,8 @@ export default function AddPage() {
               )}
 
               {error && (
-                <div className="px-4 py-3 rounded-xl text-sm" style={{ background: "var(--nf-error-bg)", color: "var(--nf-error-text)", border: "1px solid var(--nf-error-border)" }}>
-                  ⚠️ {error}
+                <div className="px-4 py-3 rounded-xl text-sm flex items-center gap-2" style={{ background: "var(--nf-error-bg)", color: "var(--nf-error-text)", border: "1px solid var(--nf-error-border)" }}>
+                  <Icon icon="hugeicons:alert-02" width={16} style={{ flexShrink: 0 }} /> {error}
                 </div>
               )}
 
@@ -376,59 +598,6 @@ export default function AddPage() {
           </div>
         )}
 
-        {/* ── LOADING PHASE ── */}
-        {phase === "loading" && (
-          <div className="rounded-2xl p-8 nf-fadein-up" style={{ background: "var(--nf-card)", border: "1px solid var(--nf-border)", boxShadow: "var(--nf-shadow-lg)" }}>
-            {/* Brain icon with ping */}
-            <div className="flex justify-center mb-6">
-              <div className="relative">
-                <div className="w-20 h-20 rounded-full flex items-center justify-center text-4xl nf-pulse"
-                  style={{ background: "var(--nf-card-alt)", border: "2px solid var(--nf-primary)" }}>
-                  🧠
-                </div>
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full nf-ping"
-                  style={{ background: "#10b981" }} />
-              </div>
-            </div>
-
-            {/* Step text */}
-            <p className="text-base text-center font-semibold mb-1" style={{ color: "var(--nf-text)", fontFamily: "'Bricolage Grotesque', sans-serif" }}>{activeStepText}</p>
-            <p className="text-sm text-center mb-5" style={{ color: "var(--nf-text-3)" }}>{activeStepSub}</p>
-
-            {/* Progress bar */}
-            <div className="w-full rounded-full overflow-hidden mb-6" style={{ height: "6px", background: "var(--nf-card-alt)" }}>
-              <div className="h-full rounded-full nf-shimmer-bar transition-all duration-700"
-                style={{ width: `${progress}%` }} />
-            </div>
-
-            {/* Steps checklist */}
-            <div className="space-y-3 max-w-xs mx-auto">
-              {STEPS[tab].map((step, i) => {
-                const state = stepStates[i];
-                return (
-                  <div key={i} className="flex items-center gap-3">
-                    <span style={{ width: 20, textAlign: "center", flexShrink: 0 }}>
-                      {state === "done" && <span style={{ color: "#10b981" }}>✓</span>}
-                      {state === "active" && <span className="nf-spin text-sm" style={{ color: "var(--nf-primary)" }}>⟳</span>}
-                      {state === "idle" && <span style={{ color: "var(--nf-text-4)" }}>○</span>}
-                    </span>
-                    <span className="text-sm transition-all" style={{
-                      color: state === "done" ? "#10b981" : state === "active" ? "var(--nf-primary)" : "var(--nf-text-4)",
-                      textDecoration: state === "done" ? "line-through" : "none",
-                      fontWeight: state === "active" ? 600 : 400,
-                    }}>
-                      {step.text}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-
-            <p className="text-xs text-center mt-6" style={{ color: "var(--nf-text-4)" }}>
-              This usually takes 15–30 seconds
-            </p>
-          </div>
-        )}
 
         {/* ── PREVIEW PHASE ── */}
         {phase === "preview" && preview && (
@@ -454,7 +623,10 @@ export default function AddPage() {
                     background: preview.content_source === "transcript" ? "var(--nf-green-bg)" : preview.content_source === "audio" ? "var(--nf-blue-bg)" : "var(--nf-yellow-bg)",
                     color: preview.content_source === "transcript" ? "var(--nf-green-text)" : preview.content_source === "audio" ? "var(--nf-blue-text)" : "var(--nf-yellow-text)",
                   }}>
-                    {preview.content_source === "transcript" ? "📝 Transcript" : preview.content_source === "audio" ? "🎵 Audio" : "ℹ️ Metadata"}
+                    <span className="flex items-center gap-1">
+                      <Icon icon={preview.content_source === "transcript" ? "hugeicons:sticky-note-01" : preview.content_source === "audio" ? "hugeicons:music-note-01" : "hugeicons:information-circle"} width={12} />
+                      {preview.content_source === "transcript" ? "Transcript" : preview.content_source === "audio" ? "Audio" : "Metadata"}
+                    </span>
                   </span>
                 </div>
               </div>
@@ -468,7 +640,7 @@ export default function AddPage() {
                   className="w-full px-5 py-3.5 flex items-center justify-between text-sm font-medium transition-all"
                   style={{ color: "var(--nf-text-2)" }}>
                   <span className="flex items-center gap-2">
-                    <span>📄</span>
+                    <Icon icon="hugeicons:file-02" width={16} />
                     <span>{preview.source_type === "youtube" ? "Video Transcript" : "Source Content"}</span>
                     <span className="text-xs px-2 py-0.5 rounded-full font-normal"
                       style={{ background: "var(--nf-card-alt)", color: "var(--nf-text-3)" }}>
@@ -528,7 +700,7 @@ export default function AddPage() {
             {preview.flashcards.length > 0 && (
               <div className="rounded-2xl p-5" style={{ background: "var(--nf-card)", border: "1px solid var(--nf-border)", boxShadow: "var(--nf-shadow)" }}>
                 <h3 className="text-sm font-semibold mb-3 flex items-center gap-2" style={{ color: "var(--nf-text)" }}>
-                  ⚡ Flashcards <span className="nf-badge nf-badge-flashcard">{preview.flashcards.length}</span>
+                  <Icon icon="hugeicons:flash" width={16} /> Flashcards <span className="nf-badge nf-badge-flashcard">{preview.flashcards.length}</span>
                 </h3>
                 <div className="space-y-3">
                   {preview.flashcards.map((fc, i) => (
@@ -551,7 +723,7 @@ export default function AddPage() {
                               <button onClick={() => openEdit("fc", i)} className="text-xs px-2 py-1 rounded transition-all"
                                 style={{ color: "var(--nf-text-3)" }}>✎ Edit</button>
                               <button onClick={() => removeCard("flashcard", i)} className="text-xs px-2 py-1 rounded transition-all"
-                                style={{ color: "var(--nf-error-text)" }}>✕</button>
+                                style={{ color: "var(--nf-error-text)" }}><Icon icon="hugeicons:cancel-01" width={14} /></button>
                             </div>
                           </div>
                           <div className="space-y-2">
@@ -582,7 +754,7 @@ export default function AddPage() {
             {preview.mcqs.length > 0 && (
               <div className="rounded-2xl p-5" style={{ background: "var(--nf-card)", border: "1px solid var(--nf-border)", boxShadow: "var(--nf-shadow)" }}>
                 <h3 className="text-sm font-semibold mb-3 flex items-center gap-2" style={{ color: "var(--nf-text)" }}>
-                  📋 MCQs <span className="nf-badge nf-badge-mcq">{preview.mcqs.length}</span>
+                  <Icon icon="hugeicons:note-01" width={16} /> MCQs <span className="nf-badge nf-badge-mcq">{preview.mcqs.length}</span>
                 </h3>
                 <div className="space-y-3">
                   {preview.mcqs.map((mcq, i) => (
@@ -616,7 +788,7 @@ export default function AddPage() {
                             <span className="nf-badge nf-badge-mcq text-xs">MCQ {i + 1}</span>
                             <div className="flex gap-1">
                               <button onClick={() => openEdit("mcq", i)} className="text-xs px-2 py-1 rounded" style={{ color: "var(--nf-text-3)" }}>✎ Edit</button>
-                              <button onClick={() => removeCard("mcq", i)} className="text-xs px-2 py-1 rounded" style={{ color: "var(--nf-error-text)" }}>✕</button>
+                              <button onClick={() => removeCard("mcq", i)} className="text-xs px-2 py-1 rounded" style={{ color: "var(--nf-error-text)" }}><Icon icon="hugeicons:cancel-01" width={14} /></button>
                             </div>
                           </div>
                           <p className="text-sm font-medium mb-3" style={{ color: "var(--nf-text)" }}>{mcq.question}</p>
@@ -634,7 +806,7 @@ export default function AddPage() {
                           </div>
                           {mcq.explanation && (
                             <p className="text-xs italic" style={{ color: "var(--nf-text-3)" }}>
-                              💡 {mcq.explanation}
+                              <Icon icon="hugeicons:idea-01" width={13} style={{ display: "inline", verticalAlign: "middle", marginRight: 3 }} />{mcq.explanation}
                             </p>
                           )}
                         </div>
@@ -677,14 +849,14 @@ export default function AddPage() {
               style={{ background: "var(--nf-card-alt)", border: "1px solid var(--nf-border)", color: "var(--nf-text-2)" }}>
               {generatingMore ? (
                 <span className="flex items-center justify-center gap-2">
-                  <span className="nf-spin">⟳</span> Generating more cards…
+                  <Icon icon="hugeicons:reload" width={14} className="nf-spin" /> Generating more cards…
                 </span>
               ) : "Generate More Cards from Same Content"}
             </button>
 
             {error && (
-              <div className="px-4 py-3 rounded-xl text-sm" style={{ background: "var(--nf-error-bg)", color: "var(--nf-error-text)", border: "1px solid var(--nf-error-border)" }}>
-                ⚠️ {error}
+              <div className="px-4 py-3 rounded-xl text-sm flex items-center gap-2" style={{ background: "var(--nf-error-bg)", color: "var(--nf-error-text)", border: "1px solid var(--nf-error-border)" }}>
+                <Icon icon="hugeicons:alert-02" width={16} style={{ flexShrink: 0 }} /> {error}
               </div>
             )}
 
@@ -706,7 +878,7 @@ export default function AddPage() {
               <button onClick={handleCancel}
                 className="px-5 py-3 rounded-xl text-sm transition-all"
                 style={{ background: "var(--nf-card-alt)", color: "var(--nf-text-2)", border: "1px solid var(--nf-border)" }}>
-                ← Back
+                ← Done
               </button>
             </div>
 
