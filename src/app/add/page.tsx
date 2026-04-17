@@ -5,6 +5,7 @@ import NavBar from "@/components/NavBar";
 import { UPSC_SYLLABUS_CLIENT } from "@/lib/syllabus-client";
 
 type Tab = "text" | "url" | "youtube";
+type Phase = "input" | "loading" | "preview";
 type StepState = "idle" | "active" | "done";
 
 interface FlashCard { front: string; hint: string; back: string; }
@@ -44,14 +45,15 @@ function extractYtId(url: string): string | null {
 
 export default function AddPage() {
   const router = useRouter();
+  const topRef = useRef<HTMLDivElement>(null);
+
   const [tab, setTab] = useState<Tab>("text");
   const [text, setText] = useState("");
   const [url, setUrl] = useState("");
   const [ytUrl, setYtUrl] = useState("");
   const [ytPreviewId, setYtPreviewId] = useState<string | null>(null);
 
-  // Loading
-  const [loading, setLoading] = useState(false);
+  const [phase, setPhase] = useState<Phase>("input");
   const [progress, setProgress] = useState(0);
   const [stepStates, setStepStates] = useState<StepState[]>(["idle", "idle", "idle", "idle"]);
   const [activeStepText, setActiveStepText] = useState("");
@@ -63,8 +65,8 @@ export default function AddPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [generatingMore, setGeneratingMore] = useState(false);
+  const [showTranscript, setShowTranscript] = useState(false);
 
-  // Editing state
   const [editIdx, setEditIdx] = useState<{ type: "fc" | "mcq"; idx: number } | null>(null);
   const [editForm, setEditForm] = useState<Partial<FlashCard & MCQ>>({});
 
@@ -76,7 +78,6 @@ export default function AddPage() {
     document.documentElement.classList.toggle("dark", saved === "dark");
   }, [token, router]);
 
-  // YouTube live embed preview
   useEffect(() => {
     const id = extractYtId(ytUrl);
     setYtPreviewId(id);
@@ -112,9 +113,11 @@ export default function AddPage() {
 
   async function handleGenerate() {
     setError("");
-    setLoading(true);
     setPreview(null);
     setSaved(false);
+    setShowTranscript(false);
+    setPhase("loading");
+    topRef.current?.scrollIntoView({ behavior: "smooth" });
     startLoadingAnimation(tab);
 
     try {
@@ -133,11 +136,11 @@ export default function AddPage() {
       stopLoadingAnimation();
       await new Promise((r) => setTimeout(r, 400));
       setPreview(data);
+      setPhase("preview");
     } catch (e: unknown) {
       stopLoadingAnimation();
       setError(e instanceof Error ? e.message : "Something went wrong");
-    } finally {
-      setLoading(false);
+      setPhase("input");
     }
   }
 
@@ -193,6 +196,13 @@ export default function AddPage() {
     }
   }
 
+  function handleCancel() {
+    setPreview(null);
+    setError("");
+    setShowTranscript(false);
+    setPhase("input");
+  }
+
   function openEdit(type: "fc" | "mcq", idx: number) {
     if (type === "fc") {
       const fc = preview!.flashcards[idx];
@@ -220,7 +230,7 @@ export default function AddPage() {
     else setPreview({ ...preview, mcqs: preview.mcqs.filter((_, i) => i !== idx) });
   }
 
-  const canGenerate = !loading && (
+  const canGenerate = phase === "input" && (
     (tab === "text" && text.length >= 20) ||
     (tab === "url" && url.length > 5) ||
     (tab === "youtube" && ytUrl.length > 10)
@@ -233,6 +243,9 @@ export default function AddPage() {
       <NavBar />
       <main className="max-w-3xl mx-auto px-4 py-8 space-y-5">
 
+        {/* Scroll anchor */}
+        <div ref={topRef} />
+
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold" style={{ fontFamily: "'Bricolage Grotesque', sans-serif", color: "var(--nf-text)" }}>
@@ -243,100 +256,101 @@ export default function AddPage() {
           </p>
         </div>
 
-        {/* Input card */}
-        <div className="rounded-2xl overflow-hidden" style={{ background: "var(--nf-card)", border: "1px solid var(--nf-border)", boxShadow: "var(--nf-shadow)" }}>
-          {/* Tab bar */}
-          <div className="flex border-b" style={{ borderColor: "var(--nf-border)" }}>
-            {(["text", "url", "youtube"] as const).map((t) => (
-              <button key={t} onClick={() => { setTab(t); setError(""); }}
-                className="flex-1 py-3 text-sm font-medium border-b-2 transition-all"
-                style={tab === t
-                  ? { borderBottomColor: "var(--nf-accent)", color: "var(--nf-accent)" }
-                  : { borderBottomColor: "transparent", color: "var(--nf-text-3)" }}>
-                {t === "text" ? "📝 Paste Text" : t === "url" ? "🔗 Website URL" : "▶️ YouTube"}
-              </button>
-            ))}
-          </div>
+        {/* ── INPUT PHASE ── */}
+        {phase === "input" && (
+          <div className="rounded-2xl overflow-hidden" style={{ background: "var(--nf-card)", border: "1px solid var(--nf-border)", boxShadow: "var(--nf-shadow)" }}>
+            {/* Tab bar */}
+            <div className="flex border-b" style={{ borderColor: "var(--nf-border)" }}>
+              {(["text", "url", "youtube"] as const).map((t) => (
+                <button key={t} onClick={() => { setTab(t); setError(""); }}
+                  className="flex-1 py-3 text-sm font-medium border-b-2 transition-all"
+                  style={tab === t
+                    ? { borderBottomColor: "var(--nf-accent)", color: "var(--nf-accent)" }
+                    : { borderBottomColor: "transparent", color: "var(--nf-text-3)" }}>
+                  {t === "text" ? "📝 Paste Text" : t === "url" ? "🔗 Website URL" : "▶️ YouTube"}
+                </button>
+              ))}
+            </div>
 
-          <div className="p-5 space-y-3">
-            {tab === "text" && (
-              <div>
-                <label className="text-xs uppercase tracking-wider font-medium" style={{ color: "var(--nf-text-3)" }}>
-                  Your Notes / Coaching Material
-                </label>
-                <textarea rows={8}
-                  placeholder="Paste your coaching notes, NCERT paragraphs, newspaper articles — anything you want to revise later…"
-                  value={text} onChange={(e) => setText(e.target.value)}
-                  className="mt-2 w-full px-4 py-3 rounded-xl text-sm outline-none resize-none"
-                  style={{ background: "var(--nf-input-bg)", border: "1px solid var(--nf-input-border)", color: "var(--nf-text)" }} />
-                <p className="text-xs mt-1" style={{ color: "var(--nf-text-4)" }}>{text.length} chars {text.length < 20 && text.length > 0 ? "— need at least 20" : ""}</p>
-              </div>
-            )}
-
-            {tab === "url" && (
-              <div>
-                <label className="text-xs uppercase tracking-wider font-medium" style={{ color: "var(--nf-text-3)" }}>Website URL</label>
-                <input type="url" placeholder="https://www.thehindu.com/…"
-                  value={url} onChange={(e) => setUrl(e.target.value)}
-                  className="mt-2 w-full px-4 py-3 rounded-xl text-sm outline-none"
-                  style={{ background: "var(--nf-input-bg)", border: "1px solid var(--nf-input-border)", color: "var(--nf-text)" }} />
-                <p className="text-xs mt-1.5" style={{ color: "var(--nf-text-3)" }}>
-                  Works with The Hindu, PIB, Wikipedia, government websites.
-                </p>
-              </div>
-            )}
-
-            {tab === "youtube" && (
-              <div className="space-y-3">
+            <div className="p-5 space-y-3">
+              {tab === "text" && (
                 <div>
-                  <label className="text-xs uppercase tracking-wider font-medium" style={{ color: "var(--nf-text-3)" }}>YouTube Video URL</label>
-                  <input type="url" placeholder="https://www.youtube.com/watch?v=…"
-                    value={ytUrl} onChange={(e) => setYtUrl(e.target.value)}
+                  <label className="text-xs uppercase tracking-wider font-medium" style={{ color: "var(--nf-text-3)" }}>
+                    Your Notes / Coaching Material
+                  </label>
+                  <textarea rows={8}
+                    placeholder="Paste your coaching notes, NCERT paragraphs, newspaper articles — anything you want to revise later…"
+                    value={text} onChange={(e) => setText(e.target.value)}
+                    className="mt-2 w-full px-4 py-3 rounded-xl text-sm outline-none resize-none"
+                    style={{ background: "var(--nf-input-bg)", border: "1px solid var(--nf-input-border)", color: "var(--nf-text)" }} />
+                  <p className="text-xs mt-1" style={{ color: "var(--nf-text-4)" }}>{text.length} chars {text.length < 20 && text.length > 0 ? "— need at least 20" : ""}</p>
+                </div>
+              )}
+
+              {tab === "url" && (
+                <div>
+                  <label className="text-xs uppercase tracking-wider font-medium" style={{ color: "var(--nf-text-3)" }}>Website URL</label>
+                  <input type="url" placeholder="https://www.thehindu.com/…"
+                    value={url} onChange={(e) => setUrl(e.target.value)}
                     className="mt-2 w-full px-4 py-3 rounded-xl text-sm outline-none"
                     style={{ background: "var(--nf-input-bg)", border: "1px solid var(--nf-input-border)", color: "var(--nf-text)" }} />
                   <p className="text-xs mt-1.5" style={{ color: "var(--nf-text-3)" }}>
-                    Works with any UPSC lecture video — auto-detects transcript.
+                    Works with The Hindu, PIB, Wikipedia, government websites.
                   </p>
                 </div>
-                {/* Live embed preview */}
-                {ytPreviewId && (
-                  <div className="rounded-xl overflow-hidden nf-fadein-up" style={{ border: "1px solid var(--nf-border)" }}>
-                    <div style={{ position: "relative", paddingTop: "56.25%" }}>
-                      <iframe
-                        src={`https://www.youtube.com/embed/${ytPreviewId}`}
-                        className="absolute inset-0 w-full h-full"
-                        style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
-                        frameBorder="0"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                      />
-                    </div>
+              )}
+
+              {tab === "youtube" && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs uppercase tracking-wider font-medium" style={{ color: "var(--nf-text-3)" }}>YouTube Video URL</label>
+                    <input type="url" placeholder="https://www.youtube.com/watch?v=…"
+                      value={ytUrl} onChange={(e) => setYtUrl(e.target.value)}
+                      className="mt-2 w-full px-4 py-3 rounded-xl text-sm outline-none"
+                      style={{ background: "var(--nf-input-bg)", border: "1px solid var(--nf-input-border)", color: "var(--nf-text)" }} />
+                    <p className="text-xs mt-1.5" style={{ color: "var(--nf-text-3)" }}>
+                      Works with any UPSC lecture video — auto-detects transcript.
+                    </p>
                   </div>
-                )}
-              </div>
-            )}
+                  {/* Live embed preview — only shown in input phase */}
+                  {ytPreviewId && (
+                    <div className="rounded-xl overflow-hidden nf-fadein-up" style={{ border: "1px solid var(--nf-border)" }}>
+                      <div style={{ position: "relative", paddingTop: "56.25%" }}>
+                        <iframe
+                          src={`https://www.youtube.com/embed/${ytPreviewId}`}
+                          style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
+                          frameBorder="0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
-            {error && (
-              <div className="px-4 py-3 rounded-xl text-sm" style={{ background: "var(--nf-error-bg)", color: "var(--nf-error-text)", border: "1px solid var(--nf-error-border)" }}>
-                ⚠️ {error}
-              </div>
-            )}
+              {error && (
+                <div className="px-4 py-3 rounded-xl text-sm" style={{ background: "var(--nf-error-bg)", color: "var(--nf-error-text)", border: "1px solid var(--nf-error-border)" }}>
+                  ⚠️ {error}
+                </div>
+              )}
 
-            <button onClick={handleGenerate} disabled={!canGenerate}
-              className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-all"
-              style={{ background: canGenerate ? "var(--nf-primary)" : "var(--nf-text-4)", cursor: canGenerate ? "pointer" : "not-allowed" }}>
-              {tab === "text" ? "Generate Study Cards →" : tab === "url" ? "Fetch & Generate Cards →" : "Extract & Generate Cards →"}
-            </button>
+              <button onClick={handleGenerate} disabled={!canGenerate}
+                className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-all"
+                style={{ background: canGenerate ? "var(--nf-primary)" : "var(--nf-text-4)", cursor: canGenerate ? "pointer" : "not-allowed" }}>
+                {tab === "text" ? "Generate Study Cards →" : tab === "url" ? "Fetch & Generate Cards →" : "Extract & Generate Cards →"}
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Loading state */}
-        {loading && (
-          <div className="rounded-2xl p-6 nf-fadein-up" style={{ background: "var(--nf-card)", border: "1px solid var(--nf-border)", boxShadow: "var(--nf-shadow)" }}>
+        {/* ── LOADING PHASE ── */}
+        {phase === "loading" && (
+          <div className="rounded-2xl p-8 nf-fadein-up" style={{ background: "var(--nf-card)", border: "1px solid var(--nf-border)", boxShadow: "var(--nf-shadow-lg)" }}>
             {/* Brain icon with ping */}
-            <div className="flex justify-center mb-5">
+            <div className="flex justify-center mb-6">
               <div className="relative">
-                <div className="w-16 h-16 rounded-full flex items-center justify-center text-3xl nf-pulse"
+                <div className="w-20 h-20 rounded-full flex items-center justify-center text-4xl nf-pulse"
                   style={{ background: "var(--nf-card-alt)", border: "2px solid var(--nf-primary)" }}>
                   🧠
                 </div>
@@ -345,23 +359,23 @@ export default function AddPage() {
               </div>
             </div>
 
+            {/* Step text */}
+            <p className="text-base text-center font-semibold mb-1" style={{ color: "var(--nf-text)", fontFamily: "'Bricolage Grotesque', sans-serif" }}>{activeStepText}</p>
+            <p className="text-sm text-center mb-5" style={{ color: "var(--nf-text-3)" }}>{activeStepSub}</p>
+
             {/* Progress bar */}
-            <div className="w-full rounded-full overflow-hidden mb-3" style={{ height: "6px", background: "var(--nf-card-alt)" }}>
+            <div className="w-full rounded-full overflow-hidden mb-6" style={{ height: "6px", background: "var(--nf-card-alt)" }}>
               <div className="h-full rounded-full nf-shimmer-bar transition-all duration-700"
                 style={{ width: `${progress}%` }} />
             </div>
 
-            {/* Step text */}
-            <p className="text-sm text-center font-medium mb-0.5" style={{ color: "var(--nf-text)" }}>{activeStepText}</p>
-            <p className="text-xs text-center mb-5" style={{ color: "var(--nf-text-3)" }}>{activeStepSub}</p>
-
             {/* Steps checklist */}
-            <div className="space-y-2.5">
+            <div className="space-y-3 max-w-xs mx-auto">
               {STEPS[tab].map((step, i) => {
                 const state = stepStates[i];
                 return (
                   <div key={i} className="flex items-center gap-3">
-                    <span style={{ width: 18, textAlign: "center" }}>
+                    <span style={{ width: 20, textAlign: "center", flexShrink: 0 }}>
                       {state === "done" && <span style={{ color: "#10b981" }}>✓</span>}
                       {state === "active" && <span className="nf-spin text-sm" style={{ color: "var(--nf-primary)" }}>⟳</span>}
                       {state === "idle" && <span style={{ color: "var(--nf-text-4)" }}>○</span>}
@@ -377,14 +391,18 @@ export default function AddPage() {
                 );
               })}
             </div>
+
+            <p className="text-xs text-center mt-6" style={{ color: "var(--nf-text-4)" }}>
+              This usually takes 15–30 seconds
+            </p>
           </div>
         )}
 
-        {/* Preview section */}
-        {preview && !loading && (
+        {/* ── PREVIEW PHASE ── */}
+        {phase === "preview" && preview && (
           <div className="space-y-4 nf-fadein-up">
 
-            {/* YouTube embed (shown after generation) */}
+            {/* YouTube embed — shown once, only here in preview */}
             {preview.video_id && (
               <div className="rounded-2xl overflow-hidden" style={{ background: "var(--nf-card)", border: "1px solid var(--nf-border)", boxShadow: "var(--nf-shadow)" }}>
                 <div style={{ position: "relative", paddingTop: "56.25%" }}>
@@ -407,6 +425,35 @@ export default function AddPage() {
                     {preview.content_source === "transcript" ? "📝 Transcript" : preview.content_source === "audio" ? "🎵 Audio" : "ℹ️ Metadata"}
                   </span>
                 </div>
+              </div>
+            )}
+
+            {/* Transcript / Source Content */}
+            {preview.raw_content && preview.raw_content.length > 50 && (
+              <div className="rounded-2xl overflow-hidden" style={{ background: "var(--nf-card)", border: "1px solid var(--nf-border)", boxShadow: "var(--nf-shadow)" }}>
+                <button
+                  onClick={() => setShowTranscript((s) => !s)}
+                  className="w-full px-5 py-3.5 flex items-center justify-between text-sm font-medium transition-all"
+                  style={{ color: "var(--nf-text-2)" }}>
+                  <span className="flex items-center gap-2">
+                    <span>📄</span>
+                    <span>{preview.source_type === "youtube" ? "Video Transcript" : "Source Content"}</span>
+                    <span className="text-xs px-2 py-0.5 rounded-full font-normal"
+                      style={{ background: "var(--nf-card-alt)", color: "var(--nf-text-3)" }}>
+                      {preview.raw_content.split(/\s+/).length.toLocaleString()} words
+                    </span>
+                  </span>
+                  <span style={{ color: "var(--nf-text-4)", fontSize: 12 }}>{showTranscript ? "▲ Hide" : "▼ Show"}</span>
+                </button>
+                {showTranscript && (
+                  <div className="px-5 pb-5 nf-fadein-up" style={{ borderTop: "1px solid var(--nf-border)" }}>
+                    <div className="mt-4 max-h-80 overflow-y-auto pr-1">
+                      <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: "var(--nf-text-2)" }}>
+                        {preview.raw_content}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -591,6 +638,12 @@ export default function AddPage() {
               ) : "Generate More Cards from Same Content"}
             </button>
 
+            {error && (
+              <div className="px-4 py-3 rounded-xl text-sm" style={{ background: "var(--nf-error-bg)", color: "var(--nf-error-text)", border: "1px solid var(--nf-error-border)" }}>
+                ⚠️ {error}
+              </div>
+            )}
+
             {/* Save / done */}
             <div className="flex gap-3">
               {!saved ? (
@@ -606,10 +659,10 @@ export default function AddPage() {
                   ✓ Saved! Go to Dashboard →
                 </button>
               )}
-              <button onClick={() => { setPreview(null); setError(""); }}
+              <button onClick={handleCancel}
                 className="px-5 py-3 rounded-xl text-sm transition-all"
                 style={{ background: "var(--nf-card-alt)", color: "var(--nf-text-2)", border: "1px solid var(--nf-border)" }}>
-                Cancel
+                ← Back
               </button>
             </div>
 
