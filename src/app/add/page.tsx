@@ -225,9 +225,33 @@ export default function AddPage() {
   function saveEdit() {
     if (!editIdx || !preview) return;
     if (editIdx.type === "fc") {
-      setPreview({ ...preview, flashcards: preview.flashcards.map((c, i) => i === editIdx.idx ? { front: editForm.front || "", hint: editForm.hint || "", back: editForm.back || "" } : c) });
+      if (!editForm.front?.trim() || !editForm.back?.trim()) {
+        removeCard("flashcard", editIdx.idx);
+        setEditIdx(null);
+        return;
+      }
+      setPreview({ ...preview, flashcards: preview.flashcards.map((c, i) => i === editIdx.idx ? { front: editForm.front!.trim(), hint: editForm.hint?.trim() || "", back: editForm.back!.trim() } : c) });
     } else {
-      setPreview({ ...preview, mcqs: preview.mcqs.map((c, i) => i === editIdx.idx ? { question: editForm.question || "", options: (editForm.options as Record<string,string>) || c.options, correct_option: editForm.correct_option || c.correct_option, explanation: editForm.explanation || "" } : c) });
+      const opts = editForm.options as Record<string, string> | undefined;
+      if (!editForm.question?.trim()) {
+        removeCard("mcq", editIdx.idx);
+        setEditIdx(null);
+        return;
+      }
+      setPreview({ ...preview, mcqs: preview.mcqs.map((c, i) => i === editIdx.idx ? { question: editForm.question!.trim(), options: opts || c.options, correct_option: editForm.correct_option || c.correct_option, explanation: editForm.explanation?.trim() || "" } : c) });
+    }
+    setEditIdx(null);
+  }
+
+  function cancelEdit() {
+    if (!editIdx || !preview) { setEditIdx(null); return; }
+    // Remove the card if it was newly added and left blank
+    if (editIdx.type === "fc") {
+      const card = preview.flashcards[editIdx.idx];
+      if (!card.front && !card.back) removeCard("flashcard", editIdx.idx);
+    } else {
+      const card = preview.mcqs[editIdx.idx];
+      if (!card.question) removeCard("mcq", editIdx.idx);
     }
     setEditIdx(null);
   }
@@ -516,7 +540,7 @@ export default function AddPage() {
                           <FieldInput label="Answer" value={editForm.back || ""} onChange={(v) => setEditForm({ ...editForm, back: v })} multiline />
                           <div className="flex gap-2 pt-1">
                             <button onClick={saveEdit} className="px-4 py-1.5 rounded-lg text-xs font-medium text-white" style={{ background: "#059669" }}>Save</button>
-                            <button onClick={() => setEditIdx(null)} className="px-4 py-1.5 rounded-lg text-xs" style={{ color: "var(--nf-text-3)" }}>Cancel</button>
+                            <button onClick={cancelEdit} className="px-4 py-1.5 rounded-lg text-xs" style={{ color: "var(--nf-text-3)" }}>Cancel</button>
                           </div>
                         </div>
                       ) : (
@@ -583,7 +607,7 @@ export default function AddPage() {
                           <FieldInput label="Explanation" value={editForm.explanation || ""} onChange={(v) => setEditForm({ ...editForm, explanation: v })} multiline />
                           <div className="flex gap-2 pt-1">
                             <button onClick={saveEdit} className="px-4 py-1.5 rounded-lg text-xs font-medium text-white" style={{ background: "#059669" }}>Save</button>
-                            <button onClick={() => setEditIdx(null)} className="px-4 py-1.5 rounded-lg text-xs" style={{ color: "var(--nf-text-3)" }}>Cancel</button>
+                            <button onClick={cancelEdit} className="px-4 py-1.5 rounded-lg text-xs" style={{ color: "var(--nf-text-3)" }}>Cancel</button>
                           </div>
                         </div>
                       ) : (
