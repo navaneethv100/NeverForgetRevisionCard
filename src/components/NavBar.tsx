@@ -251,20 +251,7 @@ export default function NavBar() {
             </button>
 
             <Link href="/" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none", flexShrink: 0 }}>
-              <div
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 7,
-                  background: "linear-gradient(135deg, #3955d4 0%, #6c47ff 100%)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                }}
-              >
-                <span style={{ color: "#fff", fontSize: 12, fontWeight: 800, lineHeight: 1, fontFamily: "'Poppins', sans-serif", letterSpacing: "-0.05em" }}>NF</span>
-              </div>
+              <img src="/logo.png" alt="NF" style={{ width: 28, height: 28, borderRadius: 7, flexShrink: 0 }} />
               <span
                 style={{
                   fontFamily: "'Poppins', sans-serif",
@@ -392,9 +379,7 @@ export default function NavBar() {
             {/* Sidebar header */}
             <div style={{ padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--nf-border)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ width: 24, height: 24, borderRadius: 6, background: "linear-gradient(135deg, #3955d4 0%, #6c47ff 100%)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <span style={{ color: "#fff", fontSize: 10, fontWeight: 800, lineHeight: 1, fontFamily: "'Poppins', sans-serif", letterSpacing: "-0.05em" }}>NF</span>
-                </div>
+                <img src="/logo.png" alt="NF" style={{ width: 24, height: 24, borderRadius: 6 }} />
                 <span style={{ fontFamily: "'Poppins', sans-serif", fontSize: "0.95rem", fontWeight: 600, color: "var(--nf-text)" }}>
                   NeverForget
                 </span>
