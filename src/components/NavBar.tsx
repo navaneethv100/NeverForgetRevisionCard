@@ -20,6 +20,8 @@ export default function NavBar() {
   const [userForm, setUserForm] = useState<UserForm>({ name: "", exam_name: "", exam_date: "" });
   const [saving, setSaving] = useState(false);
   const [settingsError, setSettingsError] = useState("");
+  const [showStreak, setShowStreak] = useState(false);
+  const [streakData, setStreakData] = useState<{ streak_days: number; longest_streak: number; total_review_days: number; reviews_today: number } | null>(null);
 
   useEffect(() => {
     const isDark = document.documentElement.classList.contains("dark");
@@ -94,6 +96,26 @@ export default function NavBar() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function openStreak() {
+    const token = localStorage.getItem("nf_token");
+    if (!token) return;
+    try {
+      const res = await fetch("/api/dashboard", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const d = await res.json();
+        setStreakData({
+          streak_days: d.streak_days,
+          longest_streak: d.longest_streak,
+          total_review_days: d.total_review_days,
+          reviews_today: d.reviews_today,
+        });
+      }
+    } catch { /* ignore */ }
+    setShowStreak(true);
   }
 
   function signOut() {
@@ -178,9 +200,9 @@ export default function NavBar() {
               <button
                 style={{ ...iconBtn(false), color: "var(--nf-text-3)" }}
                 title={`${streak} day streak`}
-                onClick={() => {}}
+                onClick={openStreak}
               >
-                <Icon icon="hugeicons:flame" width={20} />
+                <span style={{ fontSize: 18, lineHeight: 1 }}>🔥</span>
               </button>
               {streak > 0 && (
                 <span
@@ -395,6 +417,51 @@ export default function NavBar() {
               <Icon icon="hugeicons:logout-03" width={16} />
               Sign out
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Streak Modal */}
+      {showStreak && (
+        <div
+          className="qm-overlay"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowStreak(false); }}
+        >
+          <div className="qm-card" style={{ textAlign: "center" }}>
+            <button className="qm-close" onClick={() => setShowStreak(false)}>
+              <Icon icon="hugeicons:cancel-01" width={16} />
+            </button>
+
+            <div style={{ fontSize: 48, lineHeight: 1, marginBottom: 8 }}>
+              <span style={{ fontSize: 44, lineHeight: 1 }}>🔥</span>
+            </div>
+            <h3 style={{ fontSize: "1.6rem", fontWeight: 700, color: "var(--nf-text)", margin: "0 0 4px", fontFamily: "'Poppins', sans-serif" }}>
+              {streakData?.streak_days ?? streak} day{(streakData?.streak_days ?? streak) !== 1 ? "s" : ""}
+            </h3>
+            <p style={{ fontSize: "0.85rem", color: "var(--nf-text-3)", margin: "0 0 24px" }}>
+              {(streakData?.streak_days ?? streak) > 0 ? "Keep it going!" : "Review cards to start a streak!"}
+            </p>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+              <div style={{ background: "var(--nf-input-bg)", borderRadius: 12, padding: "14px 8px" }}>
+                <div style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--nf-text)" }}>
+                  {streakData?.longest_streak ?? 0}
+                </div>
+                <div style={{ fontSize: "0.7rem", color: "var(--nf-text-3)", marginTop: 2 }}>Longest Streak</div>
+              </div>
+              <div style={{ background: "var(--nf-input-bg)", borderRadius: 12, padding: "14px 8px" }}>
+                <div style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--nf-text)" }}>
+                  {streakData?.total_review_days ?? 0}
+                </div>
+                <div style={{ fontSize: "0.7rem", color: "var(--nf-text-3)", marginTop: 2 }}>Days Reviewed</div>
+              </div>
+              <div style={{ background: "var(--nf-input-bg)", borderRadius: 12, padding: "14px 8px" }}>
+                <div style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--nf-text)" }}>
+                  {streakData?.reviews_today ?? 0}
+                </div>
+                <div style={{ fontSize: "0.7rem", color: "var(--nf-text-3)", marginTop: 2 }}>Today</div>
+              </div>
+            </div>
           </div>
         </div>
       )}

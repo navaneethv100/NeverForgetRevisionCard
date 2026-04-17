@@ -1,7 +1,10 @@
 import { prisma } from "./db";
 
 function toDateOnly(d: Date): string {
-  return d.toISOString().split("T")[0];
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function todayStr(): string {
@@ -40,6 +43,10 @@ export async function recordReviewActivity(userId: number) {
   if (!lastReviewDate) {
     newCurrentStreak = 1;
     newTotalReviewDays = 1;
+  } else if (lastReviewDate === today) {
+    // Already reviewed today but todayDate wasn't set — keep streak
+    newCurrentStreak = streak.currentStreak;
+    newTotalReviewDays = streak.totalReviewDays;
   } else if (lastReviewDate === yesterday) {
     newCurrentStreak = streak.currentStreak + 1;
     newTotalReviewDays = streak.totalReviewDays + 1;

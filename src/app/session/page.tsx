@@ -315,82 +315,126 @@ function SessionContent() {
             <div style={{ position: "absolute", bottom: hasNext2 ? 14 : 0, left: 14, right: 14, height: 52, borderRadius: 21, background: "var(--nf-card)", border: "2px solid var(--nf-border)", boxShadow: "0 6px 20px rgba(0,0,0,0.08)", zIndex: 2 }} />
           )}
 
-          <div
-            key={cardKey}
-            className={exiting ? "nf-card-exit" : "nf-card-enter"}
-            onClick={() => { if (isFlashcard && !showAnswer) setShowAnswer(true); }}
-            style={{ position: "relative", zIndex: 10, borderRadius: 22, padding: "24px 24px 28px", background: "var(--nf-card)", border: "2px solid var(--nf-border)", boxShadow: "0 8px 40px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)", height: "100%", display: "flex", flexDirection: "column", cursor: isFlashcard && !showAnswer ? "pointer" : "default", overflow: "hidden auto", boxSizing: "border-box" }}
-          >
-            {/* Card header */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 }}>
-              <span style={{ fontSize: "0.72rem", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--nf-text-4)" }}>
-                {card.subject}
-              </span>
-              {card.hint && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); setShowHint((s) => !s); }}
-                  style={{ width: 30, height: 30, borderRadius: 9, border: `1.5px solid ${showHint ? "var(--nf-info-border)" : "var(--nf-border)"}`, background: showHint ? "var(--nf-info-bg)" : "transparent", color: showHint ? "var(--nf-info-text)" : "var(--nf-text-3)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "all 0.15s" }}
-                >
-                  <Icon icon="hugeicons:idea-01" width={15} />
-                </button>
-              )}
-            </div>
+          {isFlashcard ? (
+            /* ── Flashcard with flip animation ── */
+            <div
+              key={cardKey}
+              className={exiting ? "nf-card-exit" : "nf-card-enter"}
+              onClick={() => { if (!showAnswer) setShowAnswer(true); }}
+              style={{ position: "relative", zIndex: 10, height: "100%", cursor: !showAnswer ? "pointer" : "default" }}
+            >
+              <div className="nf-flip-container">
+                <div className={`nf-flip-inner${showAnswer ? " flipped" : ""}`}>
+                  {/* Front — Question */}
+                  <div className="nf-flip-front" style={{ padding: "24px 24px 28px", background: "var(--nf-card)", border: "2px solid var(--nf-border)", boxShadow: "0 8px 40px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 }}>
+                      <span style={{ fontSize: "0.72rem", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--nf-text-4)" }}>
+                        {card.subject}
+                      </span>
+                      {card.hint && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setShowHint((s) => !s); }}
+                          style={{ width: 30, height: 30, borderRadius: 9, border: `1.5px solid ${showHint ? "var(--nf-info-border)" : "var(--nf-border)"}`, background: showHint ? "var(--nf-info-bg)" : "transparent", color: showHint ? "var(--nf-info-text)" : "var(--nf-text-3)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "all 0.15s" }}
+                        >
+                          <Icon icon="hugeicons:idea-01" width={15} />
+                        </button>
+                      )}
+                    </div>
+                    {showHint && card.hint && (
+                      <div className="nf-fadein-up" style={{ fontSize: "0.82rem", lineHeight: 1.55, padding: "10px 14px", borderRadius: 10, marginBottom: 20, background: "var(--nf-info-bg)", color: "var(--nf-info-text)", border: "1px solid var(--nf-info-border)", textAlign: "center" }}>
+                        {card.hint}
+                      </div>
+                    )}
+                    <p style={{ fontFamily: "'Poppins', sans-serif", fontSize: "clamp(1rem, 3vw, 1.15rem)", fontWeight: 500, lineHeight: 1.55, color: "var(--nf-text)", margin: 0, textAlign: "center", flex: 1, display: "flex", alignItems: "center", justifyContent: "center", letterSpacing: "-0.01em" }}>
+                      {card.front}
+                    </p>
+                    <p style={{ fontSize: "0.72rem", textAlign: "center", marginTop: 16, color: "var(--nf-text-4)" }}>
+                      Tap to flip
+                    </p>
+                  </div>
 
-            {showHint && card.hint && (
-              <div className="nf-fadein-up" style={{ fontSize: "0.82rem", lineHeight: 1.55, padding: "10px 14px", borderRadius: 10, marginBottom: 20, background: "var(--nf-info-bg)", color: "var(--nf-info-text)", border: "1px solid var(--nf-info-border)", textAlign: "center" }}>
-                {card.hint}
+                  {/* Back — Answer */}
+                  <div className="nf-flip-back" style={{ padding: "24px 24px 28px", background: "var(--nf-card)", border: "2px solid var(--nf-border)", boxShadow: "0 8px 40px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 }}>
+                      <span style={{ fontSize: "0.72rem", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--nf-text-4)" }}>
+                        {card.subject}
+                      </span>
+                      <span style={{ fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--nf-primary)", background: "var(--nf-primary-soft)", padding: "4px 10px", borderRadius: 8 }}>
+                        Answer
+                      </span>
+                    </div>
+                    <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+                      <p style={{ fontFamily: "'Poppins', sans-serif", fontSize: "clamp(0.85rem, 2.5vw, 1rem)", fontWeight: 500, lineHeight: 1.55, color: "var(--nf-text-3)", margin: "0 0 20px", textAlign: "center", letterSpacing: "-0.01em" }}>
+                        {card.front}
+                      </p>
+                      <div style={{ width: "100%", height: 1, background: "var(--nf-border)", marginBottom: 20 }} />
+                      <p style={{ fontSize: "1.05rem", lineHeight: 1.65, color: "var(--nf-text)", margin: 0, fontFamily: "'Lato', sans-serif", textAlign: "center" }}>
+                        {card.back}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
-            )}
-
-            {/* Question */}
-            <p style={{ fontFamily: "'Poppins', sans-serif", fontSize: "clamp(1rem, 3vw, 1.15rem)", fontWeight: 500, lineHeight: 1.55, color: "var(--nf-text)", margin: 0, textAlign: "center", flex: 1, display: "flex", alignItems: "center", justifyContent: "center", letterSpacing: "-0.01em" }}>
-              {card.front}
-            </p>
-
-            {/* Answer area */}
-            <div style={{ marginTop: 24 }}>
-              {isFlashcard ? (
-                <>
-                  {showAnswer && (
-                    <div className="nf-fadein-up" style={{ borderRadius: 14, padding: "18px 20px", border: "1.5px solid var(--nf-border)", textAlign: "center" }}>
-                      <p style={{ fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700, color: "var(--nf-text-4)", margin: "0 0 10px" }}>Answer</p>
-                      <p style={{ fontSize: "1rem", lineHeight: 1.6, color: "var(--nf-text)", margin: 0, fontFamily: "'Lato', sans-serif" }}>{card.back}</p>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {Object.entries(card.options || {}).map(([key, val]) => {
-                    let s: React.CSSProperties = { background: "transparent", border: "1.5px solid var(--nf-border)", color: "var(--nf-text)" };
-                    if (selectedOption) {
-                      if (key === card.correct_option) s = { background: "transparent", border: "2px solid var(--nf-correct-border)", color: "var(--nf-correct-text)" };
-                      else if (key === selectedOption) s = { background: "transparent", border: "2px solid var(--nf-wrong-border)", color: "var(--nf-wrong-text)" };
-                    }
-                    return (
-                      <button key={key} disabled={!!selectedOption}
-                        onClick={() => handleOptionSelect(key)}
-                        style={{ ...s, width: "100%", textAlign: "left", padding: "11px 16px", borderRadius: 12, fontSize: "0.875rem", cursor: selectedOption ? "default" : "pointer", display: "flex", alignItems: "center", gap: 10, fontFamily: "'Lato', sans-serif" }}>
-                        <span style={{ fontWeight: 700, flexShrink: 0, fontFamily: "'Poppins', sans-serif" }}>{key}.</span>
-                        <span style={{ flex: 1 }}>{val}</span>
-                        {selectedOption && key === card.correct_option && <Icon icon="hugeicons:checkmark-circle-01" width={16} style={{ flexShrink: 0 }} />}
-                        {selectedOption && key === selectedOption && key !== card.correct_option && <Icon icon="hugeicons:cancel-circle" width={16} style={{ flexShrink: 0 }} />}
-                      </button>
-                    );
-                  })}
-                  {showAnswer && card.explanation && (
-                    <div className="nf-fadein-up" style={{ padding: "13px 16px", borderRadius: 12, fontSize: "0.85rem", lineHeight: 1.55, color: "var(--nf-text-2)", border: "1px solid var(--nf-border)", marginTop: 4 }}>
-                      <span style={{ fontWeight: 700 }}>Explanation: </span>{card.explanation}
-                    </div>
-                  )}
+            </div>
+          ) : (
+            /* ── MCQ card (no flip) ── */
+            <div
+              key={cardKey}
+              className={exiting ? "nf-card-exit" : "nf-card-enter"}
+              style={{ position: "relative", zIndex: 10, borderRadius: 22, padding: "24px 24px 28px", background: "var(--nf-card)", border: "2px solid var(--nf-border)", boxShadow: "0 8px 40px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)", height: "100%", display: "flex", flexDirection: "column", overflow: "hidden auto", boxSizing: "border-box" }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 }}>
+                <span style={{ fontSize: "0.72rem", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--nf-text-4)" }}>
+                  {card.subject}
+                </span>
+                {card.hint && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowHint((s) => !s); }}
+                    style={{ width: 30, height: 30, borderRadius: 9, border: `1.5px solid ${showHint ? "var(--nf-info-border)" : "var(--nf-border)"}`, background: showHint ? "var(--nf-info-bg)" : "transparent", color: showHint ? "var(--nf-info-text)" : "var(--nf-text-3)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "all 0.15s" }}
+                  >
+                    <Icon icon="hugeicons:idea-01" width={15} />
+                  </button>
+                )}
+              </div>
+              {showHint && card.hint && (
+                <div className="nf-fadein-up" style={{ fontSize: "0.82rem", lineHeight: 1.55, padding: "10px 14px", borderRadius: 10, marginBottom: 20, background: "var(--nf-info-bg)", color: "var(--nf-info-text)", border: "1px solid var(--nf-info-border)", textAlign: "center" }}>
+                  {card.hint}
                 </div>
               )}
+              <p style={{ fontFamily: "'Poppins', sans-serif", fontSize: "clamp(1rem, 3vw, 1.15rem)", fontWeight: 500, lineHeight: 1.55, color: "var(--nf-text)", margin: 0, textAlign: "center", flex: 1, display: "flex", alignItems: "center", justifyContent: "center", letterSpacing: "-0.01em" }}>
+                {card.front}
+              </p>
+              <div style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 8 }}>
+                {Object.entries(card.options || {}).map(([key, val]) => {
+                  let s: React.CSSProperties = { background: "transparent", border: "1.5px solid var(--nf-border)", color: "var(--nf-text)" };
+                  if (selectedOption) {
+                    if (key === card.correct_option) s = { background: "transparent", border: "2px solid var(--nf-correct-border)", color: "var(--nf-correct-text)" };
+                    else if (key === selectedOption) s = { background: "transparent", border: "2px solid var(--nf-wrong-border)", color: "var(--nf-wrong-text)" };
+                  }
+                  return (
+                    <button key={key} disabled={!!selectedOption}
+                      onClick={() => handleOptionSelect(key)}
+                      style={{ ...s, width: "100%", textAlign: "left", padding: "11px 16px", borderRadius: 12, fontSize: "0.875rem", cursor: selectedOption ? "default" : "pointer", display: "flex", alignItems: "center", gap: 10, fontFamily: "'Lato', sans-serif" }}>
+                      <span style={{ fontWeight: 700, flexShrink: 0, fontFamily: "'Poppins', sans-serif" }}>{key}.</span>
+                      <span style={{ flex: 1 }}>{val}</span>
+                      {selectedOption && key === card.correct_option && <Icon icon="hugeicons:checkmark-circle-01" width={16} style={{ flexShrink: 0 }} />}
+                      {selectedOption && key === selectedOption && key !== card.correct_option && <Icon icon="hugeicons:cancel-circle" width={16} style={{ flexShrink: 0 }} />}
+                    </button>
+                  );
+                })}
+                {showAnswer && card.explanation && (
+                  <div className="nf-fadein-up" style={{ padding: "13px 16px", borderRadius: 12, fontSize: "0.85rem", lineHeight: 1.55, color: "var(--nf-text-2)", border: "1px solid var(--nf-border)", marginTop: 4 }}>
+                    <span style={{ fontWeight: 700 }}>Explanation: </span>{card.explanation}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {isFlashcard && !showAnswer && (
           <p style={{ fontSize: "0.72rem", textAlign: "center", marginTop: 14, color: "var(--nf-text-4)" }}>
-            Tap card or press <kbd style={{ padding: "2px 8px", borderRadius: 6, fontFamily: "monospace", border: "1px solid var(--nf-border)", color: "var(--nf-text-3)" }}>Space</kbd> to reveal
+            Tap card or press <kbd style={{ padding: "2px 8px", borderRadius: 6, fontFamily: "monospace", border: "1px solid var(--nf-border)", color: "var(--nf-text-3)" }}>Space</kbd> to flip
           </p>
         )}
 

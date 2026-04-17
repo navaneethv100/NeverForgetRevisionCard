@@ -235,6 +235,38 @@ textarea:focus {
   100% { transform: scale(1); opacity: 1; }
 }
 
+/* ── Card flip ── */
+.nf-flip-container {
+  perspective: 1200px;
+  width: 100%;
+  height: 100%;
+}
+.nf-flip-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-style: preserve-3d;
+}
+.nf-flip-inner.flipped {
+  transform: rotateY(180deg);
+}
+.nf-flip-front,
+.nf-flip-back {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border-radius: 22px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden auto;
+  box-sizing: border-box;
+}
+.nf-flip-back {
+  transform: rotateY(180deg);
+}
+
 /* ── Modal button font ── */
 .qm-card button:not(.qm-close) {
   font-family: 'Poppins', sans-serif;

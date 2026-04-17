@@ -368,20 +368,20 @@ export default function AddPage() {
           </div>
 
           {/* CTAs */}
-          <div style={{ marginTop: 36, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+          <div style={{ marginTop: 36, display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12 }}>
+            <button
+              onClick={() => setPhase("preview")}
+              style={{ fontFamily: "'Poppins', sans-serif", fontSize: "0.9rem", fontWeight: 600, background: "var(--nf-input-bg)", color: "var(--nf-text-2)", border: "1.5px solid var(--nf-border)", borderRadius: 14, padding: "14px 28px", cursor: "pointer" }}
+            >
+              Manage Flashcards
+            </button>
             <button
               onClick={handleStartRevision}
               disabled={saving}
-              style={{ fontFamily: "'Poppins', sans-serif", fontSize: "0.95rem", fontWeight: 600, background: "#10b981", color: "#fff", border: "none", borderRadius: 14, padding: "14px 40px", cursor: saving ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 8, boxShadow: "0 4px 20px rgba(16,185,129,0.3)", opacity: saving ? 0.75 : 1 }}
+              style={{ fontFamily: "'Poppins', sans-serif", fontSize: "0.9rem", fontWeight: 600, background: "#10b981", color: "#fff", border: "none", borderRadius: 14, padding: "14px 28px", cursor: saving ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 8, boxShadow: "0 4px 20px rgba(16,185,129,0.3)", opacity: saving ? 0.75 : 1 }}
             >
               <Icon icon="hugeicons:play" width={18} />
-              {saving ? "Saving…" : "Start Revision"}
-            </button>
-            <button
-              onClick={() => setPhase("preview")}
-              style={{ fontFamily: "'Poppins', sans-serif", fontSize: "0.875rem", fontWeight: 500, background: "transparent", color: "var(--nf-text-3)", border: "1.5px solid var(--nf-border)", borderRadius: 14, padding: "12px 32px", cursor: "pointer" }}
-            >
-              Manage Flashcards
+              {saving ? "Saving…" : "Start Practice"}
             </button>
           </div>
         </div>
