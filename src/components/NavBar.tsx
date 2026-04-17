@@ -10,10 +10,10 @@ export default function NavBar() {
   const [userName, setUserName] = useState("");
 
   useEffect(() => {
-    const saved = localStorage.getItem("nf_theme");
-    const isDark = saved === "dark";
+    // Sync React state with whatever the DOM currently has (may have been set
+    // by the beforeInteractive script before hydration).
+    const isDark = document.documentElement.classList.contains("dark");
     setDark(isDark);
-    document.documentElement.classList.toggle("dark", isDark);
     try {
       const user = JSON.parse(localStorage.getItem("nf_user") || "{}");
       setUserName(user.name || "");
@@ -21,9 +21,10 @@ export default function NavBar() {
   }, []);
 
   function toggleTheme() {
-    const isDark = !dark;
-    setDark(isDark);
+    // Read DOM truth — not React state — to avoid stale-closure mismatches.
+    const isDark = !document.documentElement.classList.contains("dark");
     document.documentElement.classList.toggle("dark", isDark);
+    setDark(isDark);
     localStorage.setItem("nf_theme", isDark ? "dark" : "light");
   }
 
