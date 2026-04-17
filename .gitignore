@@ -12,6 +12,11 @@ node_modules/
 
 # database
 /data/
+/prisma/data/
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
 
 # env files
 .env
