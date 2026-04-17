@@ -193,6 +193,7 @@ export default function NavBar() {
   const isHome = pathname === "/";
   const isAnalytics = pathname === "/analytics";
   const isCards = pathname === "/cards";
+  const isAudio = pathname === "/audio";
   const isLibrary = pathname === "/library";
 
   const iconBtn = (active: boolean): React.CSSProperties => ({
@@ -214,6 +215,7 @@ export default function NavBar() {
     { label: "Home", icon: "hugeicons:home-04", path: "/", active: isHome },
     { label: "Analytics", icon: "hugeicons:analytics-01", path: "/analytics", active: isAnalytics },
     { label: "My Cards", icon: "hugeicons:library", path: "/cards", active: isCards },
+    { label: "Revision Audio", icon: "hugeicons:headphones", path: "/audio", active: isAudio },
     // { label: "My Library", icon: "hugeicons:library", path: "/library", active: isLibrary },
   ];
 
