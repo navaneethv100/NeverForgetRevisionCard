@@ -51,7 +51,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold nf-logo" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>
+          <h1 className="text-3xl font-bold nf-logo" style={{ fontFamily: "'Poppins', sans-serif" }}>
             NeverForget
           </h1>
           <p className="mt-1 text-sm" style={{ color: "var(--nf-text-3)" }}>UPSC Revision OS</p>

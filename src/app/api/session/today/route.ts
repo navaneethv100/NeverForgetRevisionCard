@@ -2,9 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { calculateRetrievability } from "@/lib/fsrs";
-
-const NEW_CARDS_PER_DAY = 30;
-const REVIEW_CARDS_LIMIT = 200;
+import { REVIEW_CARDS_LIMIT } from "@/lib/session-config";
 
 export async function GET(req: NextRequest) {
   const user = await getAuthUser(req);
@@ -16,7 +14,7 @@ export async function GET(req: NextRequest) {
   let now = new Date();
   if (simulateDate) {
     try {
-      now = new Date(simulateDate + "T00:00:00.000Z");
+      now = new Date(simulateDate + "T23:59:59.999Z");
     } catch {}
   }
 
@@ -32,7 +30,7 @@ export async function GET(req: NextRequest) {
     orderBy: { nextReviewDate: "asc" },
   });
 
-  const allStates = [...dueStates.slice(0, REVIEW_CARDS_LIMIT), ...newStates.slice(0, NEW_CARDS_PER_DAY)];
+  const allStates = [...dueStates.slice(0, REVIEW_CARDS_LIMIT), ...newStates];
 
   const cards = [];
   for (const ms of allStates) {
