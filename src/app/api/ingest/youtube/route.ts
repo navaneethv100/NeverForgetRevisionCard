@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
       concept: result.concept,
       flashcards: result.flashcards,
       mcqs: result.mcqs,
-      raw_content: `Video: ${result.videoTitle}`,
+      raw_content: result.contentText,
       source_type: "youtube",
       source_url: url,
       video_id: result.videoId,

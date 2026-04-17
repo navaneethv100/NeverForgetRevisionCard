@@ -693,13 +693,13 @@ export default function AddPage() {
               {!saved ? (
                 <button onClick={handleSave} disabled={saving || totalCards === 0}
                   className="flex-1 py-3 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-50"
-                  style={{ background: "#059669" }}>
+                  style={{ background: "var(--nf-primary)", boxShadow: "0 2px 12px rgba(57,85,212,0.3)" }}>
                   {saving ? "Saving…" : `Save All ${totalCards} Cards to My Revision`}
                 </button>
               ) : (
                 <button onClick={() => router.push("/")}
                   className="flex-1 py-3 rounded-xl text-sm font-semibold text-white nf-fadein-up"
-                  style={{ background: "#059669" }}>
+                  style={{ background: "linear-gradient(135deg, #059669 0%, #10b981 100%)", boxShadow: "0 2px 14px rgba(16,185,129,0.4)" }}>
                   ✓ Saved! Go to Dashboard →
                 </button>
               )}
