@@ -47,44 +47,59 @@
 }
 
 :root.dark {
-  --nf-bg: #090a10;
-  --nf-card: #10121a;
-  --nf-card-alt: #181b25;
-  --nf-border: #1e2130;
-  --nf-border-hover: #2a2e3e;
-  --nf-input-bg: #13151e;
-  --nf-input-border: #242838;
-  --nf-text: #e0e2e8;
-  --nf-text-2: #858a9e;
-  --nf-text-3: #555a6e;
-  --nf-text-4: #353a4e;
-  --nf-accent: #caa64c;
-  --nf-accent-h: #ddb85a;
-  --nf-accent-soft: rgba(202,166,76,0.08);
-  --nf-primary: #5a7af5;
-  --nf-primary-h: #7692ff;
-  --nf-primary-soft: rgba(90,122,245,0.1);
-  --nf-overlay: rgba(0,0,0,0.75);
-  --nf-shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
-  --nf-shadow: 0 2px 8px rgba(0,0,0,0.35);
-  --nf-shadow-lg: 0 8px 30px rgba(0,0,0,0.45);
-  --nf-shadow-glow: 0 0 0 3px rgba(90,122,245,0.15);
-  --nf-success-bg: rgba(16,185,129,0.1); --nf-success-border: rgba(16,185,129,0.22); --nf-success-text: #6ee7b7;
-  --nf-error-bg: rgba(239,68,68,0.1); --nf-error-border: rgba(239,68,68,0.22); --nf-error-text: #fca5a5;
-  --nf-warning-bg: rgba(245,158,11,0.1); --nf-warning-border: rgba(245,158,11,0.22); --nf-warning-text: #fcd34d;
-  --nf-info-bg: rgba(59,130,246,0.1); --nf-info-border: rgba(59,130,246,0.22); --nf-info-text: #93c5fd;
-  --nf-purple-bg: rgba(139,92,246,0.12); --nf-purple-text: #c4b5fd;
-  --nf-orange-bg: rgba(249,115,22,0.12); --nf-orange-text: #fdba74;
-  --nf-green-bg: rgba(16,185,129,0.12); --nf-green-text: #6ee7b7;
-  --nf-red-bg: rgba(239,68,68,0.12); --nf-red-text: #fca5a5;
-  --nf-yellow-bg: rgba(245,158,11,0.12); --nf-yellow-text: #fcd34d;
-  --nf-blue-bg: rgba(59,130,246,0.12); --nf-blue-text: #93c5fd;
-  --nf-gray-bg: rgba(148,163,184,0.1); --nf-gray-text: #94a3b8;
-  --nf-again-bg: rgba(239,68,68,0.1); --nf-again-border: rgba(239,68,68,0.25); --nf-again-text: #fca5a5;
-  --nf-hard-bg: rgba(249,115,22,0.1); --nf-hard-border: rgba(249,115,22,0.25); --nf-hard-text: #fdba74;
-  --nf-good-bg: rgba(59,130,246,0.1); --nf-good-border: rgba(59,130,246,0.25); --nf-good-text: #93c5fd;
-  --nf-easy-bg: rgba(16,185,129,0.1); --nf-easy-border: rgba(16,185,129,0.25); --nf-easy-text: #6ee7b7;
-  --nf-opt-bg: #181b25; --nf-opt-border: #242838; --nf-opt-hover: #1e2130;
+  /* Surfaces — blue-tinted dark, not pure black */
+  --nf-bg: #0e0f17;
+  --nf-card: #14161f;
+  --nf-card-alt: #1a1d2a;
+  --nf-border: #232638;
+  --nf-border-hover: #2e3149;
+  --nf-input-bg: #181b29;
+  --nf-input-border: #272b3f;
+
+  /* Typography — 4-level hierarchy, all readable */
+  --nf-text: #eceef5;
+  --nf-text-2: #9da2bc;
+  --nf-text-3: #6b7091;
+  --nf-text-4: #484d68;
+
+  /* Brand */
+  --nf-accent: #e4b84e;
+  --nf-accent-h: #f0ca65;
+  --nf-accent-soft: rgba(228,184,78,0.09);
+  --nf-primary: #6478f8;
+  --nf-primary-h: #7a8cff;
+  --nf-primary-soft: rgba(100,120,248,0.13);
+
+  /* Overlays & shadows */
+  --nf-overlay: rgba(0,0,0,0.72);
+  --nf-shadow-sm: 0 1px 3px rgba(0,0,0,0.45);
+  --nf-shadow: 0 2px 12px rgba(0,0,0,0.45);
+  --nf-shadow-lg: 0 8px 32px rgba(0,0,0,0.6);
+  --nf-shadow-glow: 0 0 0 3px rgba(100,120,248,0.2);
+
+  /* Semantic */
+  --nf-success-bg: rgba(16,185,129,0.1); --nf-success-border: rgba(16,185,129,0.25); --nf-success-text: #5eead4;
+  --nf-error-bg: rgba(239,68,68,0.1); --nf-error-border: rgba(239,68,68,0.25); --nf-error-text: #fca5a5;
+  --nf-warning-bg: rgba(245,158,11,0.1); --nf-warning-border: rgba(245,158,11,0.25); --nf-warning-text: #fcd34d;
+  --nf-info-bg: rgba(100,120,248,0.1); --nf-info-border: rgba(100,120,248,0.25); --nf-info-text: #a5b4fc;
+
+  /* Tag / badge colors */
+  --nf-purple-bg: rgba(167,139,250,0.1); --nf-purple-text: #c4b5fd;
+  --nf-orange-bg: rgba(251,146,60,0.1); --nf-orange-text: #fdba74;
+  --nf-green-bg: rgba(52,211,153,0.1); --nf-green-text: #6ee7b7;
+  --nf-red-bg: rgba(248,113,113,0.1); --nf-red-text: #fca5a5;
+  --nf-yellow-bg: rgba(251,191,36,0.1); --nf-yellow-text: #fcd34d;
+  --nf-blue-bg: rgba(100,120,248,0.1); --nf-blue-text: #a5b4fc;
+  --nf-gray-bg: rgba(148,163,184,0.08); --nf-gray-text: #94a3b8;
+
+  /* Rating buttons */
+  --nf-again-bg: rgba(239,68,68,0.1); --nf-again-border: rgba(239,68,68,0.28); --nf-again-text: #fca5a5;
+  --nf-hard-bg: rgba(249,115,22,0.1); --nf-hard-border: rgba(249,115,22,0.28); --nf-hard-text: #fdba74;
+  --nf-good-bg: rgba(100,120,248,0.1); --nf-good-border: rgba(100,120,248,0.28); --nf-good-text: #a5b4fc;
+  --nf-easy-bg: rgba(16,185,129,0.1); --nf-easy-border: rgba(16,185,129,0.28); --nf-easy-text: #6ee7b7;
+
+  /* Quiz options */
+  --nf-opt-bg: #1a1d2a; --nf-opt-border: #272b3f; --nf-opt-hover: #21253a;
   --nf-correct-bg: rgba(16,185,129,0.1); --nf-correct-border: rgba(16,185,129,0.3); --nf-correct-text: #6ee7b7;
   --nf-wrong-bg: rgba(239,68,68,0.1); --nf-wrong-border: rgba(239,68,68,0.3); --nf-wrong-text: #fca5a5;
 }
@@ -92,6 +107,9 @@
 * { transition: background-color 0.2s ease, border-color 0.2s ease, color 0.15s ease, box-shadow 0.2s ease; }
 html { scroll-behavior: smooth; color-scheme: light; }
 html.dark { color-scheme: dark; }
+
+/* Frosted-glass navbar in dark mode */
+html.dark nav { background: rgba(14,15,23,0.82) !important; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
 
 body {
   background: var(--nf-bg);
