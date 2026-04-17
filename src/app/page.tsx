@@ -121,27 +121,43 @@ export default function DashboardPage() {
         )}
 
         {/* Today's session card */}
-        <div className="rounded-2xl p-6 nf-lift" style={{ background: "var(--nf-card)", border: "1px solid var(--nf-border)", boxShadow: "var(--nf-shadow)" }}>
-          <div className="flex items-center justify-between flex-wrap gap-4">
+        <div className="rounded-2xl px-5 py-4 nf-lift" style={{
+          background: "var(--nf-card)",
+          border: "1px solid var(--nf-border)",
+          boxShadow: "var(--nf-shadow)",
+          borderLeft: data.due_today === 0
+            ? "3px solid #10b981"
+            : `3px solid ${isExamSprint ? "#ef4444" : "var(--nf-primary)"}`,
+        }}>
+          <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
-              <h2 className="text-lg font-semibold" style={{ color: "var(--nf-text)" }}>
-                {data.due_today === 0 ? "All done for today! 🎉" : isExamSprint ? "🚀 Exam Sprint Mode" : "Today's Session"}
-              </h2>
-              <p className="text-sm mt-0.5" style={{ color: "var(--nf-text-3)" }}>
-                {data.due_today === 0
-                  ? "No cards due. Come back tomorrow."
-                  : isExamSprint
-                  ? `${data.cards_at_risk} at-risk cards · Exam in ${data.days_to_exam} days`
-                  : `${data.due_today} cards · ~${data.estimated_session_minutes} min`}
+              <p className="text-xs font-semibold uppercase tracking-widest mb-0.5"
+                style={{ color: data.due_today === 0 ? "#10b981" : isExamSprint ? "#ef4444" : "var(--nf-primary)" }}>
+                {data.due_today === 0 ? "All Done" : isExamSprint ? "🚀 Exam Sprint" : "📚 Daily Review"}
               </p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-lg font-bold" style={{ color: "var(--nf-text)" }}>
+                  {data.due_today === 0
+                    ? `${data.reviews_today > 0 ? `${data.reviews_today} cards reviewed` : "Nothing due"} today 🎉`
+                    : `${data.due_today} cards`}
+                </span>
+                {data.due_today > 0 && <>
+                  <span style={{ color: "var(--nf-text-4)" }}>·</span>
+                  <span className="text-sm" style={{ color: "var(--nf-text-3)" }}>~{data.estimated_session_minutes} min</span>
+                  {data.new_cards > 0 && <span className="nf-badge nf-badge-new">{data.new_cards} new</span>}
+                </>}
+              </div>
             </div>
             {data.due_today > 0 && (
               <button
                 onClick={() => router.push(isExamSprint ? "/session?mode=sprint" : "/session")}
-                className="px-6 py-2.5 rounded-xl text-sm font-semibold text-white transition-all"
-                style={{ background: isExamSprint ? "#ef4444" : "var(--nf-primary)" }}
+                className="px-5 py-2 rounded-xl text-sm font-semibold text-white transition-all shrink-0"
+                style={{
+                  background: isExamSprint ? "#ef4444" : "var(--nf-primary)",
+                  boxShadow: isExamSprint ? "0 2px 10px rgba(239,68,68,0.3)" : "0 2px 10px rgba(57,85,212,0.25)",
+                }}
               >
-                {isExamSprint ? "Start Sprint" : "Start Revision"}
+                {isExamSprint ? "Start Sprint →" : "Start Revision →"}
               </button>
             )}
           </div>

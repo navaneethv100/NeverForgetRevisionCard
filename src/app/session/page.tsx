@@ -205,13 +205,18 @@ function SessionContent() {
 
         {/* Progress bar */}
         <div className="mb-5">
-          <div className="flex justify-between text-xs mb-1.5" style={{ color: "var(--nf-text-3)" }}>
-            <span className="font-medium">{isSprint ? "🚀 Exam Sprint" : "📚 Daily Review"}</span>
-            <span>{currentIdx + 1} / {cards.length}</span>
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-xs font-semibold uppercase tracking-widest"
+              style={{ color: isSprint ? "#ef4444" : "var(--nf-primary)" }}>
+              {isSprint ? "🚀 Exam Sprint" : "📚 Daily Review"}
+            </span>
+            <span className="text-xs font-medium tabular-nums" style={{ color: "var(--nf-text-3)" }}>
+              {currentIdx + 1} <span style={{ color: "var(--nf-text-4)" }}>/ {cards.length}</span>
+            </span>
           </div>
-          <div className="h-2 rounded-full overflow-hidden" style={{ background: "var(--nf-card-alt)" }}>
-            <div className="h-full rounded-full transition-all duration-500"
-              style={{ width: `${progress}%`, background: "var(--nf-primary)" }} />
+          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--nf-card-alt)" }}>
+            <div className="h-full rounded-full transition-all duration-500 nf-shimmer-bar"
+              style={{ width: `${progress}%`, background: isSprint ? "#ef4444" : undefined }} />
           </div>
         </div>
 
