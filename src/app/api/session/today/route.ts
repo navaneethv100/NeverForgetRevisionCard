@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const simulateDate = searchParams.get("simulate_date");
+  const cardIdsParam = searchParams.get("card_ids");
 
   let now = new Date();
   if (simulateDate) {
@@ -18,19 +19,25 @@ export async function GET(req: NextRequest) {
     } catch {}
   }
 
-  const newStates = await prisma.cardMemoryState.findMany({
-    where: { userId: user.id, nextReviewDate: null },
-  });
+  let allStates;
 
-  const dueStates = await prisma.cardMemoryState.findMany({
-    where: {
-      userId: user.id,
-      nextReviewDate: { lte: now, not: null },
-    },
-    orderBy: { nextReviewDate: "asc" },
-  });
-
-  const allStates = [...dueStates.slice(0, REVIEW_CARDS_LIMIT), ...newStates];
+  if (cardIdsParam) {
+    const ids = cardIdsParam.split(",").map(Number).filter(Boolean);
+    allStates = await prisma.cardMemoryState.findMany({
+      where: { userId: user.id, cardId: { in: ids } },
+    });
+  } else {
+    const newStates = await prisma.cardMemoryState.findMany({
+      where: { userId: user.id, nextReviewDate: null },
+    });
+    const dueStates = await prisma.cardMemoryState.findMany({
+      where: { userId: user.id, nextReviewDate: { lte: now, not: null } },
+      orderBy: { nextReviewDate: "asc" },
+    });
+    const dueSlice = dueStates.slice(0, REVIEW_CARDS_LIMIT);
+    const newSlice = newStates.slice(0, Math.max(0, REVIEW_CARDS_LIMIT - dueSlice.length));
+    allStates = [...dueSlice, ...newSlice];
+  }
 
   const cards = [];
   for (const ms of allStates) {

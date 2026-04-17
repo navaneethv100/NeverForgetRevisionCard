@@ -87,6 +87,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       note_id: note.id,
       cards_saved: createdCards.length,
+      card_ids: createdCards.map((c) => c.id),
       message: `Saved ${createdCards.length} cards`,
     });
   } catch (e: unknown) {

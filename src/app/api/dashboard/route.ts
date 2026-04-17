@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
 
   // Retention stats
   const stats = await getRetentionStats(user.id, simNow);
-  const dueToday = Math.min(stats.dueToday, REVIEW_CARDS_LIMIT) + stats.newCards;
+  const dueToday = stats.dueToday + stats.newCards;
   const estMinutes = Math.max(1, Math.round(dueToday * 1.1));
 
   // Streak

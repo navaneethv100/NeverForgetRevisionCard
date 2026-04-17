@@ -32,6 +32,7 @@ function SessionContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isSprint = searchParams.get("mode") === "sprint";
+  const cardIds = searchParams.get("card_ids");
   const { simulateDate, ready } = useTimeTravel();
 
   const [cards, setCards] = useState<SessionCard[]>([]);
@@ -70,7 +71,10 @@ function SessionContent() {
     setLoading(true);
     try {
       const base = isSprint ? "/api/session/sprint" : "/api/session/today";
-      const endpoint = simulateDate ? `${base}?simulate_date=${simulateDate}` : base;
+      const params = new URLSearchParams();
+      if (simulateDate) params.set("simulate_date", simulateDate);
+      if (cardIds) params.set("card_ids", cardIds);
+      const endpoint = `${base}${params.toString() ? `?${params}` : ""}`;
       const res = await fetch(endpoint, { headers: { Authorization: `Bearer ${token}` } });
       if (res.status === 401) { localStorage.removeItem("nf_token"); localStorage.removeItem("nf_user"); router.push("/login"); return; }
       const data = await res.json();
@@ -78,7 +82,7 @@ function SessionContent() {
     } finally {
       setLoading(false);
     }
-  }, [router, isSprint, simulateDate]);
+  }, [router, isSprint, simulateDate, cardIds]);
 
   useEffect(() => {
     const saved = localStorage.getItem("nf_theme");

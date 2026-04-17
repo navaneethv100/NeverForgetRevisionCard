@@ -185,7 +185,14 @@ export default function AddPage() {
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
           body: JSON.stringify(preview),
         });
-        if (res.ok) setSaved(true);
+        if (res.ok) {
+          setSaved(true);
+          const data = await res.json();
+          if (data.card_ids?.length) {
+            router.push(`/session?card_ids=${data.card_ids.join(",")}`);
+            return;
+          }
+        }
       } catch { /* still navigate */ }
       finally { setSaving(false); }
     }
