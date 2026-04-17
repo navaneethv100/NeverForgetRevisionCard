@@ -70,6 +70,14 @@ export default function AddPage() {
   const [editIdx, setEditIdx] = useState<{ type: "fc" | "mcq"; idx: number } | null>(null);
   const [editForm, setEditForm] = useState<Partial<FlashCard & MCQ>>({});
 
+  useEffect(() => {
+    if (!editIdx) return;
+    const id = `edit-${editIdx.type}-${editIdx.idx}`;
+    setTimeout(() => {
+      document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 50);
+  }, [editIdx]);
+
   const token = typeof window !== "undefined" ? localStorage.getItem("nf_token") : null;
 
   useEffect(() => {
@@ -502,7 +510,7 @@ export default function AddPage() {
                   {preview.flashcards.map((fc, i) => (
                     <div key={i} className="rounded-xl nf-fadein-up" style={{ background: "var(--nf-card-alt)", border: "1px solid var(--nf-border)", animationDelay: `${i * 60}ms` }}>
                       {editIdx?.type === "fc" && editIdx.idx === i ? (
-                        <div className="p-4 space-y-2">
+                        <div id={`edit-fc-${i}`} className="p-4 space-y-2">
                           <FieldInput label="Question" value={editForm.front || ""} onChange={(v) => setEditForm({ ...editForm, front: v })} multiline />
                           <FieldInput label="Hint" value={editForm.hint || ""} onChange={(v) => setEditForm({ ...editForm, hint: v })} />
                           <FieldInput label="Answer" value={editForm.back || ""} onChange={(v) => setEditForm({ ...editForm, back: v })} multiline />
@@ -556,7 +564,7 @@ export default function AddPage() {
                   {preview.mcqs.map((mcq, i) => (
                     <div key={i} className="rounded-xl nf-fadein-up" style={{ background: "var(--nf-card-alt)", border: "1px solid var(--nf-border)", animationDelay: `${i * 60}ms` }}>
                       {editIdx?.type === "mcq" && editIdx.idx === i ? (
-                        <div className="p-4 space-y-2">
+                        <div id={`edit-mcq-${i}`} className="p-4 space-y-2">
                           <FieldInput label="Question" value={editForm.question || ""} onChange={(v) => setEditForm({ ...editForm, question: v })} multiline />
                           {(["A","B","C","D"] as const).map((k) => (
                             <FieldInput key={k} label={`Option ${k}`}
