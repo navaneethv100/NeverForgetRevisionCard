@@ -141,3 +141,26 @@ body {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+
+.nf-shimmer-bar {
+  background: linear-gradient(90deg, var(--nf-primary) 0%, #7692ff 40%, var(--nf-primary) 80%);
+  background-size: 200% 100%;
+  animation: nf-shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes nf-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.nf-spin { display: inline-block; animation: nf-spin 0.9s linear infinite; }
+
+@keyframes nf-fadein-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.nf-fadein-up { animation: nf-fadein-up 0.35s ease both; }
+
+@keyframes nf-ping {
+  75%, 100% { transform: scale(2); opacity: 0; }
+}
+.nf-ping { animation: nf-ping 1.2s cubic-bezier(0, 0, 0.2, 1) infinite; }

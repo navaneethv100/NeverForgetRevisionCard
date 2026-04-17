@@ -1,10 +1,11 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import NavBar from "@/components/NavBar";
 import { UPSC_SYLLABUS_CLIENT } from "@/lib/syllabus-client";
 
 type Tab = "text" | "url" | "youtube";
+type StepState = "idle" | "active" | "done";
 
 interface FlashCard { front: string; hint: string; back: string; }
 interface MCQ { question: string; options: Record<string, string>; correct_option: string; explanation: string; }
@@ -15,20 +16,57 @@ interface PreviewData {
   video_id?: string; video_title?: string; content_source?: string;
 }
 
+const STEPS: Record<Tab, { text: string; sub: string }[]> = {
+  text: [
+    { text: "Reading your content", sub: "Parsing and preparing text" },
+    { text: "Classifying subject & topic", sub: "AI is analysing the content domain" },
+    { text: "Generating flashcards", sub: "Creating active recall questions" },
+    { text: "Generating MCQs", sub: "Building UPSC-pattern questions" },
+  ],
+  url: [
+    { text: "Fetching webpage", sub: "Extracting clean text from URL" },
+    { text: "Classifying subject & topic", sub: "AI is analysing the content domain" },
+    { text: "Generating flashcards", sub: "Creating active recall questions" },
+    { text: "Generating MCQs", sub: "Building UPSC-pattern questions" },
+  ],
+  youtube: [
+    { text: "Analysing video", sub: "Extracting transcript or metadata" },
+    { text: "Classifying subject & topic", sub: "AI is analysing the content domain" },
+    { text: "Generating flashcards", sub: "Creating active recall questions" },
+    { text: "Generating MCQs", sub: "Building UPSC-pattern questions" },
+  ],
+};
+
+function extractYtId(url: string): string | null {
+  const m = url.match(/(?:v=|\/v\/|youtu\.be\/|embed\/|live\/)([a-zA-Z0-9_-]{11})/);
+  return m ? m[1] : null;
+}
+
 export default function AddPage() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("text");
   const [text, setText] = useState("");
   const [url, setUrl] = useState("");
   const [ytUrl, setYtUrl] = useState("");
+  const [ytPreviewId, setYtPreviewId] = useState<string | null>(null);
+
+  // Loading
   const [loading, setLoading] = useState(false);
-  const [loadingStep, setLoadingStep] = useState(0);
+  const [progress, setProgress] = useState(0);
+  const [stepStates, setStepStates] = useState<StepState[]>(["idle", "idle", "idle", "idle"]);
+  const [activeStepText, setActiveStepText] = useState("");
+  const [activeStepSub, setActiveStepSub] = useState("");
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const [error, setError] = useState("");
   const [preview, setPreview] = useState<PreviewData | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [generatingMore, setGeneratingMore] = useState(false);
-  const [editCard, setEditCard] = useState<{ type: string; idx: number } | null>(null);
+
+  // Editing state
+  const [editIdx, setEditIdx] = useState<{ type: "fc" | "mcq"; idx: number } | null>(null);
+  const [editForm, setEditForm] = useState<Partial<FlashCard & MCQ>>({});
 
   const token = typeof window !== "undefined" ? localStorage.getItem("nf_token") : null;
 
@@ -38,23 +76,46 @@ export default function AddPage() {
     document.documentElement.classList.toggle("dark", saved === "dark");
   }, [token, router]);
 
-  const LOADING_STEPS = [
-    "Extracting content…",
-    "Classifying with AI…",
-    "Generating study cards…",
-    "Finalizing preview…",
-  ];
+  // YouTube live embed preview
+  useEffect(() => {
+    const id = extractYtId(ytUrl);
+    setYtPreviewId(id);
+  }, [ytUrl]);
+
+  function startLoadingAnimation(t: Tab) {
+    const steps = STEPS[t];
+    setProgress(0);
+    setStepStates(["idle", "idle", "idle", "idle"]);
+    let idx = 0;
+    const PCTS = [12, 38, 62, 85];
+    function advance() {
+      if (idx >= steps.length) return;
+      setProgress(PCTS[idx]);
+      setActiveStepText(steps[idx].text);
+      setActiveStepSub(steps[idx].sub);
+      setStepStates((prev) => prev.map((s, i) => {
+        if (i < idx) return "done";
+        if (i === idx) return "active";
+        return "idle";
+      }));
+      idx++;
+    }
+    advance();
+    intervalRef.current = setInterval(advance, 5000);
+  }
+
+  function stopLoadingAnimation() {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    setProgress(100);
+    setStepStates(["done", "done", "done", "done"]);
+  }
 
   async function handleGenerate() {
     setError("");
     setLoading(true);
-    setLoadingStep(0);
     setPreview(null);
     setSaved(false);
-
-    const stepInterval = setInterval(() => {
-      setLoadingStep((s) => Math.min(s + 1, LOADING_STEPS.length - 1));
-    }, 2000);
+    startLoadingAnimation(tab);
 
     try {
       let endpoint = "", body = {};
@@ -69,11 +130,13 @@ export default function AddPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Processing failed");
+      stopLoadingAnimation();
+      await new Promise((r) => setTimeout(r, 400));
       setPreview(data);
     } catch (e: unknown) {
+      stopLoadingAnimation();
       setError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
-      clearInterval(stepInterval);
       setLoading(false);
     }
   }
@@ -130,204 +193,426 @@ export default function AddPage() {
     }
   }
 
+  function openEdit(type: "fc" | "mcq", idx: number) {
+    if (type === "fc") {
+      const fc = preview!.flashcards[idx];
+      setEditForm({ front: fc.front, hint: fc.hint, back: fc.back });
+    } else {
+      const mcq = preview!.mcqs[idx];
+      setEditForm({ question: mcq.question, options: { ...mcq.options }, correct_option: mcq.correct_option, explanation: mcq.explanation });
+    }
+    setEditIdx({ type, idx });
+  }
+
+  function saveEdit() {
+    if (!editIdx || !preview) return;
+    if (editIdx.type === "fc") {
+      setPreview({ ...preview, flashcards: preview.flashcards.map((c, i) => i === editIdx.idx ? { front: editForm.front || "", hint: editForm.hint || "", back: editForm.back || "" } : c) });
+    } else {
+      setPreview({ ...preview, mcqs: preview.mcqs.map((c, i) => i === editIdx.idx ? { question: editForm.question || "", options: (editForm.options as Record<string,string>) || c.options, correct_option: editForm.correct_option || c.correct_option, explanation: editForm.explanation || "" } : c) });
+    }
+    setEditIdx(null);
+  }
+
   function removeCard(type: "flashcard" | "mcq", idx: number) {
     if (!preview) return;
-    if (type === "flashcard") {
-      setPreview({ ...preview, flashcards: preview.flashcards.filter((_, i) => i !== idx) });
-    } else {
-      setPreview({ ...preview, mcqs: preview.mcqs.filter((_, i) => i !== idx) });
-    }
+    if (type === "flashcard") setPreview({ ...preview, flashcards: preview.flashcards.filter((_, i) => i !== idx) });
+    else setPreview({ ...preview, mcqs: preview.mcqs.filter((_, i) => i !== idx) });
   }
+
+  const canGenerate = !loading && (
+    (tab === "text" && text.length >= 20) ||
+    (tab === "url" && url.length > 5) ||
+    (tab === "youtube" && ytUrl.length > 10)
+  );
+
+  const totalCards = preview ? preview.flashcards.length + preview.mcqs.length : 0;
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--nf-bg)" }}>
       <NavBar />
-      <main className="max-w-3xl mx-auto px-4 py-8 space-y-6">
+      <main className="max-w-3xl mx-auto px-4 py-8 space-y-5">
+
+        {/* Header */}
         <div>
           <h1 className="text-2xl font-bold" style={{ fontFamily: "'Bricolage Grotesque', sans-serif", color: "var(--nf-text)" }}>
             Add Content
           </h1>
-          <p className="text-sm mt-0.5" style={{ color: "var(--nf-text-3)" }}>Paste text, a URL, or a YouTube link to generate flashcards</p>
+          <p className="text-sm mt-0.5" style={{ color: "var(--nf-text-3)" }}>
+            Paste text, a URL, or a YouTube link — AI generates study cards instantly
+          </p>
         </div>
 
-        {/* Source tabs */}
-        <div className="rounded-2xl p-6" style={{ background: "var(--nf-card)", border: "1px solid var(--nf-border)", boxShadow: "var(--nf-shadow)" }}>
-          <div className="flex gap-1 rounded-xl p-1 mb-5" style={{ background: "var(--nf-card-alt)" }}>
+        {/* Input card */}
+        <div className="rounded-2xl overflow-hidden" style={{ background: "var(--nf-card)", border: "1px solid var(--nf-border)", boxShadow: "var(--nf-shadow)" }}>
+          {/* Tab bar */}
+          <div className="flex border-b" style={{ borderColor: "var(--nf-border)" }}>
             {(["text", "url", "youtube"] as const).map((t) => (
               <button key={t} onClick={() => { setTab(t); setError(""); }}
-                className="flex-1 py-2 rounded-lg text-sm font-medium transition-all"
+                className="flex-1 py-3 text-sm font-medium border-b-2 transition-all"
                 style={tab === t
-                  ? { background: "var(--nf-card)", color: "var(--nf-text)", boxShadow: "var(--nf-shadow-sm)" }
-                  : { color: "var(--nf-text-3)" }}>
-                {t === "text" ? "📝 Text" : t === "url" ? "🌐 URL" : "📺 YouTube"}
+                  ? { borderBottomColor: "var(--nf-accent)", color: "var(--nf-accent)" }
+                  : { borderBottomColor: "transparent", color: "var(--nf-text-3)" }}>
+                {t === "text" ? "📝 Paste Text" : t === "url" ? "🔗 Website URL" : "▶️ YouTube"}
               </button>
             ))}
           </div>
 
-          {tab === "text" && (
-            <textarea
-              rows={8}
-              placeholder="Paste your notes, article content, or study material here (min 20 characters)…"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl text-sm outline-none resize-none"
-              style={{ background: "var(--nf-input-bg)", border: "1px solid var(--nf-input-border)", color: "var(--nf-text)" }}
-            />
-          )}
-          {tab === "url" && (
-            <input
-              type="url"
-              placeholder="https://www.thehindu.com/…"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl text-sm outline-none"
-              style={{ background: "var(--nf-input-bg)", border: "1px solid var(--nf-input-border)", color: "var(--nf-text)" }}
-            />
-          )}
-          {tab === "youtube" && (
-            <div className="space-y-2">
-              <input
-                type="url"
-                placeholder="https://www.youtube.com/watch?v=…"
-                value={ytUrl}
-                onChange={(e) => setYtUrl(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl text-sm outline-none"
-                style={{ background: "var(--nf-input-bg)", border: "1px solid var(--nf-input-border)", color: "var(--nf-text)" }}
-              />
-              <p className="text-xs" style={{ color: "var(--nf-text-3)" }}>
-                Attempts to fetch transcript. Works best with English/Hindi UPSC lectures.
-              </p>
-            </div>
-          )}
+          <div className="p-5 space-y-3">
+            {tab === "text" && (
+              <div>
+                <label className="text-xs uppercase tracking-wider font-medium" style={{ color: "var(--nf-text-3)" }}>
+                  Your Notes / Coaching Material
+                </label>
+                <textarea rows={8}
+                  placeholder="Paste your coaching notes, NCERT paragraphs, newspaper articles — anything you want to revise later…"
+                  value={text} onChange={(e) => setText(e.target.value)}
+                  className="mt-2 w-full px-4 py-3 rounded-xl text-sm outline-none resize-none"
+                  style={{ background: "var(--nf-input-bg)", border: "1px solid var(--nf-input-border)", color: "var(--nf-text)" }} />
+                <p className="text-xs mt-1" style={{ color: "var(--nf-text-4)" }}>{text.length} chars {text.length < 20 && text.length > 0 ? "— need at least 20" : ""}</p>
+              </div>
+            )}
 
-          {error && (
-            <div className="mt-3 px-4 py-3 rounded-xl text-sm" style={{ background: "var(--nf-error-bg)", color: "var(--nf-error-text)", border: "1px solid var(--nf-error-border)" }}>
-              {error}
-            </div>
-          )}
+            {tab === "url" && (
+              <div>
+                <label className="text-xs uppercase tracking-wider font-medium" style={{ color: "var(--nf-text-3)" }}>Website URL</label>
+                <input type="url" placeholder="https://www.thehindu.com/…"
+                  value={url} onChange={(e) => setUrl(e.target.value)}
+                  className="mt-2 w-full px-4 py-3 rounded-xl text-sm outline-none"
+                  style={{ background: "var(--nf-input-bg)", border: "1px solid var(--nf-input-border)", color: "var(--nf-text)" }} />
+                <p className="text-xs mt-1.5" style={{ color: "var(--nf-text-3)" }}>
+                  Works with The Hindu, PIB, Wikipedia, government websites.
+                </p>
+              </div>
+            )}
 
-          <button
-            onClick={handleGenerate}
-            disabled={loading || (!text && tab === "text") || (!url && tab === "url") || (!ytUrl && tab === "youtube")}
-            className="mt-4 w-full py-3 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-50"
-            style={{ background: "var(--nf-primary)" }}
-          >
-            {loading ? "Processing…" : "Generate Flashcards"}
-          </button>
+            {tab === "youtube" && (
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs uppercase tracking-wider font-medium" style={{ color: "var(--nf-text-3)" }}>YouTube Video URL</label>
+                  <input type="url" placeholder="https://www.youtube.com/watch?v=…"
+                    value={ytUrl} onChange={(e) => setYtUrl(e.target.value)}
+                    className="mt-2 w-full px-4 py-3 rounded-xl text-sm outline-none"
+                    style={{ background: "var(--nf-input-bg)", border: "1px solid var(--nf-input-border)", color: "var(--nf-text)" }} />
+                  <p className="text-xs mt-1.5" style={{ color: "var(--nf-text-3)" }}>
+                    Works with any UPSC lecture video — auto-detects transcript.
+                  </p>
+                </div>
+                {/* Live embed preview */}
+                {ytPreviewId && (
+                  <div className="rounded-xl overflow-hidden nf-fadein-up" style={{ border: "1px solid var(--nf-border)" }}>
+                    <div style={{ position: "relative", paddingTop: "56.25%" }}>
+                      <iframe
+                        src={`https://www.youtube.com/embed/${ytPreviewId}`}
+                        className="absolute inset-0 w-full h-full"
+                        style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
+                        frameBorder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {error && (
+              <div className="px-4 py-3 rounded-xl text-sm" style={{ background: "var(--nf-error-bg)", color: "var(--nf-error-text)", border: "1px solid var(--nf-error-border)" }}>
+                ⚠️ {error}
+              </div>
+            )}
+
+            <button onClick={handleGenerate} disabled={!canGenerate}
+              className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-all"
+              style={{ background: canGenerate ? "var(--nf-primary)" : "var(--nf-text-4)", cursor: canGenerate ? "pointer" : "not-allowed" }}>
+              {tab === "text" ? "Generate Study Cards →" : tab === "url" ? "Fetch & Generate Cards →" : "Extract & Generate Cards →"}
+            </button>
+          </div>
         </div>
 
         {/* Loading state */}
         {loading && (
-          <div className="rounded-2xl p-8 text-center" style={{ background: "var(--nf-card)", border: "1px solid var(--nf-border)" }}>
-            <div className="text-4xl mb-4">🧠</div>
-            <p className="text-sm font-medium" style={{ color: "var(--nf-text)" }}>{LOADING_STEPS[loadingStep]}</p>
-            <div className="mt-4 space-y-2">
-              {LOADING_STEPS.map((step, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs justify-center"
-                  style={{ color: i <= loadingStep ? "var(--nf-primary)" : "var(--nf-text-4)" }}>
-                  <span>{i < loadingStep ? "✓" : i === loadingStep ? "⟳" : "○"}</span>
-                  <span>{step}</span>
+          <div className="rounded-2xl p-6 nf-fadein-up" style={{ background: "var(--nf-card)", border: "1px solid var(--nf-border)", boxShadow: "var(--nf-shadow)" }}>
+            {/* Brain icon with ping */}
+            <div className="flex justify-center mb-5">
+              <div className="relative">
+                <div className="w-16 h-16 rounded-full flex items-center justify-center text-3xl nf-pulse"
+                  style={{ background: "var(--nf-card-alt)", border: "2px solid var(--nf-primary)" }}>
+                  🧠
                 </div>
-              ))}
+                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full nf-ping"
+                  style={{ background: "#10b981" }} />
+              </div>
+            </div>
+
+            {/* Progress bar */}
+            <div className="w-full rounded-full overflow-hidden mb-3" style={{ height: "6px", background: "var(--nf-card-alt)" }}>
+              <div className="h-full rounded-full nf-shimmer-bar transition-all duration-700"
+                style={{ width: `${progress}%` }} />
+            </div>
+
+            {/* Step text */}
+            <p className="text-sm text-center font-medium mb-0.5" style={{ color: "var(--nf-text)" }}>{activeStepText}</p>
+            <p className="text-xs text-center mb-5" style={{ color: "var(--nf-text-3)" }}>{activeStepSub}</p>
+
+            {/* Steps checklist */}
+            <div className="space-y-2.5">
+              {STEPS[tab].map((step, i) => {
+                const state = stepStates[i];
+                return (
+                  <div key={i} className="flex items-center gap-3">
+                    <span style={{ width: 18, textAlign: "center" }}>
+                      {state === "done" && <span style={{ color: "#10b981" }}>✓</span>}
+                      {state === "active" && <span className="nf-spin text-sm" style={{ color: "var(--nf-primary)" }}>⟳</span>}
+                      {state === "idle" && <span style={{ color: "var(--nf-text-4)" }}>○</span>}
+                    </span>
+                    <span className="text-sm transition-all" style={{
+                      color: state === "done" ? "#10b981" : state === "active" ? "var(--nf-primary)" : "var(--nf-text-4)",
+                      textDecoration: state === "done" ? "line-through" : "none",
+                      fontWeight: state === "active" ? 600 : 400,
+                    }}>
+                      {step.text}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
 
-        {/* Preview */}
+        {/* Preview section */}
         {preview && !loading && (
-          <div className="space-y-4">
-            {/* Classification */}
-            <div className="rounded-2xl p-5" style={{ background: "var(--nf-card)", border: "1px solid var(--nf-border)" }}>
-              <h3 className="text-sm font-semibold mb-3" style={{ color: "var(--nf-text)" }}>Classification</h3>
-              {preview.video_id && (
-                <div className="mb-3 text-xs px-3 py-1.5 rounded-lg inline-block" style={{ background: "var(--nf-info-bg)", color: "var(--nf-info-text)" }}>
-                  Source: {preview.content_source === "transcript" ? "📝 Transcript" : preview.content_source === "audio" ? "🎵 Audio" : "ℹ️ Metadata"}
+          <div className="space-y-4 nf-fadein-up">
+
+            {/* YouTube embed (shown after generation) */}
+            {preview.video_id && (
+              <div className="rounded-2xl overflow-hidden" style={{ background: "var(--nf-card)", border: "1px solid var(--nf-border)", boxShadow: "var(--nf-shadow)" }}>
+                <div style={{ position: "relative", paddingTop: "56.25%" }}>
+                  <iframe
+                    src={`https://www.youtube.com/embed/${preview.video_id}`}
+                    style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
+                    frameBorder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
                 </div>
-              )}
+                <div className="px-4 py-3 flex items-center justify-between gap-3">
+                  <p className="text-sm font-medium truncate" style={{ color: "var(--nf-text)" }}>
+                    {preview.video_title}
+                  </p>
+                  <span className="nf-badge shrink-0" style={{
+                    background: preview.content_source === "transcript" ? "var(--nf-green-bg)" : preview.content_source === "audio" ? "var(--nf-blue-bg)" : "var(--nf-yellow-bg)",
+                    color: preview.content_source === "transcript" ? "var(--nf-green-text)" : preview.content_source === "audio" ? "var(--nf-blue-text)" : "var(--nf-yellow-text)",
+                  }}>
+                    {preview.content_source === "transcript" ? "📝 Transcript" : preview.content_source === "audio" ? "🎵 Audio" : "ℹ️ Metadata"}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Classification */}
+            <div className="rounded-2xl p-4" style={{ background: "var(--nf-card)", border: "1px solid var(--nf-border)", boxShadow: "var(--nf-shadow)" }}>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs uppercase tracking-wider font-medium" style={{ color: "var(--nf-text-3)" }}>Classified As</p>
+                <span className="nf-badge nf-badge-warning">AI Generated — Verify & Edit</span>
+              </div>
               <div className="grid grid-cols-3 gap-3">
-                {(["subject", "topic", "concept"] as const).map((field) => (
-                  <div key={field}>
-                    <label className="block text-xs mb-1 capitalize" style={{ color: "var(--nf-text-3)" }}>{field}</label>
-                    {field !== "concept" ? (
-                      <select
-                        value={preview[field]}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setPreview((p) => p ? { ...p, [field]: val, ...(field === "subject" ? { topic: Object.values(UPSC_SYLLABUS_CLIENT)[0][0] } : {}) } : p);
-                        }}
-                        className="w-full px-2 py-1.5 rounded-lg text-xs outline-none"
-                        style={{ background: "var(--nf-input-bg)", border: "1px solid var(--nf-input-border)", color: "var(--nf-text)" }}
-                      >
-                        {field === "subject"
-                          ? Object.keys(UPSC_SYLLABUS_CLIENT).map((s) => <option key={s} value={s}>{s}</option>)
-                          : (UPSC_SYLLABUS_CLIENT[preview.subject] || []).map((t) => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                    ) : (
-                      <input
-                        value={preview.concept}
-                        onChange={(e) => setPreview((p) => p ? { ...p, concept: e.target.value } : p)}
-                        className="w-full px-2 py-1.5 rounded-lg text-xs outline-none"
-                        style={{ background: "var(--nf-input-bg)", border: "1px solid var(--nf-input-border)", color: "var(--nf-text)" }}
-                      />
-                    )}
-                  </div>
-                ))}
+                <div>
+                  <label className="block text-xs uppercase tracking-wider mb-1" style={{ color: "var(--nf-text-3)" }}>Subject</label>
+                  <select value={preview.subject}
+                    onChange={(e) => setPreview((p) => p ? { ...p, subject: e.target.value, topic: UPSC_SYLLABUS_CLIENT[e.target.value]?.[0] || p.topic } : p)}
+                    className="w-full px-3 py-2 rounded-lg text-sm outline-none font-medium"
+                    style={{ background: "var(--nf-input-bg)", border: "1px solid var(--nf-input-border)", color: "var(--nf-accent)" }}>
+                    {Object.keys(UPSC_SYLLABUS_CLIENT).map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs uppercase tracking-wider mb-1" style={{ color: "var(--nf-text-3)" }}>Topic</label>
+                  <select value={preview.topic}
+                    onChange={(e) => setPreview((p) => p ? { ...p, topic: e.target.value } : p)}
+                    className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+                    style={{ background: "var(--nf-input-bg)", border: "1px solid var(--nf-input-border)", color: "var(--nf-text)" }}>
+                    {(UPSC_SYLLABUS_CLIENT[preview.subject] || []).map((t) => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs uppercase tracking-wider mb-1" style={{ color: "var(--nf-text-3)" }}>Concept</label>
+                  <input value={preview.concept}
+                    onChange={(e) => setPreview((p) => p ? { ...p, concept: e.target.value } : p)}
+                    className="w-full px-3 py-2 rounded-lg text-sm outline-none italic"
+                    style={{ background: "var(--nf-input-bg)", border: "1px solid var(--nf-input-border)", color: "var(--nf-text-2)" }} />
+                </div>
               </div>
             </div>
 
             {/* Flashcards */}
             {preview.flashcards.length > 0 && (
-              <div className="rounded-2xl p-5 space-y-3" style={{ background: "var(--nf-card)", border: "1px solid var(--nf-border)" }}>
-                <h3 className="text-sm font-semibold" style={{ color: "var(--nf-text)" }}>
-                  Flashcards <span className="nf-badge nf-badge-flashcard ml-2">{preview.flashcards.length}</span>
+              <div className="rounded-2xl p-5" style={{ background: "var(--nf-card)", border: "1px solid var(--nf-border)", boxShadow: "var(--nf-shadow)" }}>
+                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2" style={{ color: "var(--nf-text)" }}>
+                  ⚡ Flashcards <span className="nf-badge nf-badge-flashcard">{preview.flashcards.length}</span>
                 </h3>
-                {preview.flashcards.map((fc, i) => (
-                  <FlashcardPreview key={i} card={fc} index={i}
-                    isEditing={editCard?.type === "fc" && editCard.idx === i}
-                    onEdit={() => setEditCard({ type: "fc", idx: i })}
-                    onDone={() => setEditCard(null)}
-                    onRemove={() => removeCard("flashcard", i)}
-                    onChange={(updated) => setPreview((p) => p ? { ...p, flashcards: p.flashcards.map((c, j) => j === i ? updated : c) } : p)}
-                  />
-                ))}
+                <div className="space-y-3">
+                  {preview.flashcards.map((fc, i) => (
+                    <div key={i} className="rounded-xl nf-fadein-up" style={{ background: "var(--nf-card-alt)", border: "1px solid var(--nf-border)", animationDelay: `${i * 60}ms` }}>
+                      {editIdx?.type === "fc" && editIdx.idx === i ? (
+                        <div className="p-4 space-y-2">
+                          <FieldInput label="Question" value={editForm.front || ""} onChange={(v) => setEditForm({ ...editForm, front: v })} multiline />
+                          <FieldInput label="Hint" value={editForm.hint || ""} onChange={(v) => setEditForm({ ...editForm, hint: v })} />
+                          <FieldInput label="Answer" value={editForm.back || ""} onChange={(v) => setEditForm({ ...editForm, back: v })} multiline />
+                          <div className="flex gap-2 pt-1">
+                            <button onClick={saveEdit} className="px-4 py-1.5 rounded-lg text-xs font-medium text-white" style={{ background: "#059669" }}>Save</button>
+                            <button onClick={() => setEditIdx(null)} className="px-4 py-1.5 rounded-lg text-xs" style={{ color: "var(--nf-text-3)" }}>Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-4">
+                          <div className="flex items-start justify-between gap-2 mb-3">
+                            <span className="nf-badge nf-badge-flashcard text-xs">Flashcard {i + 1}</span>
+                            <div className="flex gap-1">
+                              <button onClick={() => openEdit("fc", i)} className="text-xs px-2 py-1 rounded transition-all"
+                                style={{ color: "var(--nf-text-3)" }}>✎ Edit</button>
+                              <button onClick={() => removeCard("flashcard", i)} className="text-xs px-2 py-1 rounded transition-all"
+                                style={{ color: "var(--nf-error-text)" }}>✕</button>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <div>
+                              <p className="text-xs uppercase tracking-wider mb-1" style={{ color: "var(--nf-text-3)" }}>Question</p>
+                              <p className="text-sm font-medium" style={{ color: "var(--nf-text)" }}>{fc.front}</p>
+                            </div>
+                            {fc.hint && (
+                              <div>
+                                <p className="text-xs uppercase tracking-wider mb-1" style={{ color: "var(--nf-text-3)" }}>Hint</p>
+                                <p className="text-xs italic" style={{ color: "var(--nf-text-2)" }}>{fc.hint}</p>
+                              </div>
+                            )}
+                            <div>
+                              <p className="text-xs uppercase tracking-wider mb-1" style={{ color: "var(--nf-text-3)" }}>Answer</p>
+                              <p className="text-sm" style={{ color: "var(--nf-text-2)" }}>{fc.back}</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
             {/* MCQs */}
             {preview.mcqs.length > 0 && (
-              <div className="rounded-2xl p-5 space-y-3" style={{ background: "var(--nf-card)", border: "1px solid var(--nf-border)" }}>
-                <h3 className="text-sm font-semibold" style={{ color: "var(--nf-text)" }}>
-                  MCQs <span className="nf-badge nf-badge-mcq ml-2">{preview.mcqs.length}</span>
+              <div className="rounded-2xl p-5" style={{ background: "var(--nf-card)", border: "1px solid var(--nf-border)", boxShadow: "var(--nf-shadow)" }}>
+                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2" style={{ color: "var(--nf-text)" }}>
+                  📋 MCQs <span className="nf-badge nf-badge-mcq">{preview.mcqs.length}</span>
                 </h3>
-                {preview.mcqs.map((mcq, i) => (
-                  <MCQPreview key={i} card={mcq} index={i}
-                    onRemove={() => removeCard("mcq", i)}
-                  />
-                ))}
+                <div className="space-y-3">
+                  {preview.mcqs.map((mcq, i) => (
+                    <div key={i} className="rounded-xl nf-fadein-up" style={{ background: "var(--nf-card-alt)", border: "1px solid var(--nf-border)", animationDelay: `${i * 60}ms` }}>
+                      {editIdx?.type === "mcq" && editIdx.idx === i ? (
+                        <div className="p-4 space-y-2">
+                          <FieldInput label="Question" value={editForm.question || ""} onChange={(v) => setEditForm({ ...editForm, question: v })} multiline />
+                          {(["A","B","C","D"] as const).map((k) => (
+                            <FieldInput key={k} label={`Option ${k}`}
+                              value={(editForm.options as Record<string,string>)?.[k] || ""}
+                              onChange={(v) => setEditForm({ ...editForm, options: { ...(editForm.options as Record<string,string>), [k]: v } })} />
+                          ))}
+                          <div>
+                            <p className="text-xs mb-1 uppercase tracking-wider" style={{ color: "var(--nf-text-3)" }}>Correct Option</p>
+                            <select value={editForm.correct_option || "A"}
+                              onChange={(e) => setEditForm({ ...editForm, correct_option: e.target.value })}
+                              className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+                              style={{ background: "var(--nf-input-bg)", border: "1px solid var(--nf-input-border)", color: "var(--nf-text)" }}>
+                              {["A","B","C","D"].map(o => <option key={o} value={o}>{o}</option>)}
+                            </select>
+                          </div>
+                          <FieldInput label="Explanation" value={editForm.explanation || ""} onChange={(v) => setEditForm({ ...editForm, explanation: v })} multiline />
+                          <div className="flex gap-2 pt-1">
+                            <button onClick={saveEdit} className="px-4 py-1.5 rounded-lg text-xs font-medium text-white" style={{ background: "#059669" }}>Save</button>
+                            <button onClick={() => setEditIdx(null)} className="px-4 py-1.5 rounded-lg text-xs" style={{ color: "var(--nf-text-3)" }}>Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-4">
+                          <div className="flex items-start justify-between gap-2 mb-3">
+                            <span className="nf-badge nf-badge-mcq text-xs">MCQ {i + 1}</span>
+                            <div className="flex gap-1">
+                              <button onClick={() => openEdit("mcq", i)} className="text-xs px-2 py-1 rounded" style={{ color: "var(--nf-text-3)" }}>✎ Edit</button>
+                              <button onClick={() => removeCard("mcq", i)} className="text-xs px-2 py-1 rounded" style={{ color: "var(--nf-error-text)" }}>✕</button>
+                            </div>
+                          </div>
+                          <p className="text-sm font-medium mb-3" style={{ color: "var(--nf-text)" }}>{mcq.question}</p>
+                          <div className="grid grid-cols-1 gap-1.5 mb-3">
+                            {Object.entries(mcq.options).map(([k, v]) => (
+                              <div key={k} className="text-xs px-3 py-2 rounded-lg" style={{
+                                background: k === mcq.correct_option ? "var(--nf-correct-bg)" : "var(--nf-input-bg)",
+                                color: k === mcq.correct_option ? "var(--nf-correct-text)" : "var(--nf-text-2)",
+                                border: `1px solid ${k === mcq.correct_option ? "var(--nf-correct-border)" : "var(--nf-input-border)"}`,
+                                fontWeight: k === mcq.correct_option ? 600 : 400,
+                              }}>
+                                <span className="font-semibold">{k}.</span> {v}
+                              </div>
+                            ))}
+                          </div>
+                          {mcq.explanation && (
+                            <p className="text-xs italic" style={{ color: "var(--nf-text-3)" }}>
+                              💡 {mcq.explanation}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
-            {/* Action buttons */}
-            <div className="flex gap-3 flex-wrap">
-              <button onClick={handleGenerateMore} disabled={generatingMore}
-                className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-all disabled:opacity-50"
-                style={{ border: "1px solid var(--nf-border)", color: "var(--nf-text-2)", background: "var(--nf-card)" }}>
-                {generatingMore ? "Generating…" : "+ Generate More"}
+            {/* Add blank card buttons */}
+            <div className="flex gap-2">
+              <button onClick={() => setPreview((p) => p ? { ...p, flashcards: [...p.flashcards, { front: "", hint: "", back: "" }] } : p)}
+                className="flex-1 py-2.5 rounded-xl text-sm transition-all"
+                style={{ border: "1px dashed var(--nf-border)", color: "var(--nf-text-3)" }}>
+                + Add Flashcard
               </button>
+              <button onClick={() => setPreview((p) => p ? { ...p, mcqs: [...p.mcqs, { question: "", options: { A: "", B: "", C: "", D: "" }, correct_option: "A", explanation: "" }] } : p)}
+                className="flex-1 py-2.5 rounded-xl text-sm transition-all"
+                style={{ border: "1px dashed var(--nf-border)", color: "var(--nf-text-3)" }}>
+                + Add MCQ
+              </button>
+            </div>
+
+            {/* Generate more */}
+            <button onClick={handleGenerateMore} disabled={generatingMore}
+              className="w-full py-2.5 rounded-xl text-sm font-medium transition-all disabled:opacity-50"
+              style={{ background: "var(--nf-card-alt)", border: "1px solid var(--nf-border)", color: "var(--nf-text-2)" }}>
+              {generatingMore ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="nf-spin">⟳</span> Generating more cards…
+                </span>
+              ) : "Generate More Cards from Same Content"}
+            </button>
+
+            {/* Save / done */}
+            <div className="flex gap-3">
               {!saved ? (
-                <button onClick={handleSave} disabled={saving}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-50"
-                  style={{ background: "var(--nf-primary)" }}>
-                  {saving ? "Saving…" : `Save ${(preview.flashcards.length + preview.mcqs.length)} Cards`}
+                <button onClick={handleSave} disabled={saving || totalCards === 0}
+                  className="flex-1 py-3 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-50"
+                  style={{ background: "#059669" }}>
+                  {saving ? "Saving…" : `Save All ${totalCards} Cards to My Revision`}
                 </button>
               ) : (
                 <button onClick={() => router.push("/")}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white"
-                  style={{ background: "#10b981" }}>
-                  ✓ Saved! Go to Dashboard
+                  className="flex-1 py-3 rounded-xl text-sm font-semibold text-white nf-fadein-up"
+                  style={{ background: "#059669" }}>
+                  ✓ Saved! Go to Dashboard →
                 </button>
               )}
+              <button onClick={() => { setPreview(null); setError(""); }}
+                className="px-5 py-3 rounded-xl text-sm transition-all"
+                style={{ background: "var(--nf-card-alt)", color: "var(--nf-text-2)", border: "1px solid var(--nf-border)" }}>
+                Cancel
+              </button>
             </div>
+
           </div>
         )}
       </main>
@@ -335,65 +620,15 @@ export default function AddPage() {
   );
 }
 
-function FlashcardPreview({ card, index, isEditing, onEdit, onDone, onRemove, onChange }: {
-  card: FlashCard; index: number; isEditing: boolean;
-  onEdit: () => void; onDone: () => void; onRemove: () => void;
-  onChange: (c: FlashCard) => void;
-}) {
+function FieldInput({ label, value, onChange, multiline }: { label: string; value: string; onChange: (v: string) => void; multiline?: boolean }) {
+  const s: React.CSSProperties = { background: "var(--nf-input-bg)", border: "1px solid var(--nf-input-border)", color: "var(--nf-text)" };
   return (
-    <div className="rounded-xl p-4" style={{ background: "var(--nf-card-alt)", border: "1px solid var(--nf-border)" }}>
-      {isEditing ? (
-        <div className="space-y-2">
-          <input value={card.front} onChange={(e) => onChange({ ...card, front: e.target.value })}
-            placeholder="Question" className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-            style={{ background: "var(--nf-input-bg)", border: "1px solid var(--nf-input-border)", color: "var(--nf-text)" }} />
-          <input value={card.hint} onChange={(e) => onChange({ ...card, hint: e.target.value })}
-            placeholder="Hint" className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-            style={{ background: "var(--nf-input-bg)", border: "1px solid var(--nf-input-border)", color: "var(--nf-text)" }} />
-          <textarea value={card.back} onChange={(e) => onChange({ ...card, back: e.target.value })}
-            rows={3} placeholder="Answer" className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none"
-            style={{ background: "var(--nf-input-bg)", border: "1px solid var(--nf-input-border)", color: "var(--nf-text)" }} />
-          <button onClick={onDone} className="text-xs px-3 py-1 rounded-lg"
-            style={{ background: "var(--nf-primary-soft)", color: "var(--nf-primary)" }}>Done</button>
-        </div>
-      ) : (
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <span className="nf-badge nf-badge-flashcard text-xs">Flashcard {index + 1}</span>
-            <p className="text-sm mt-1 font-medium" style={{ color: "var(--nf-text)" }}>{card.front}</p>
-            {card.hint && <p className="text-xs mt-0.5" style={{ color: "var(--nf-text-3)" }}>Hint: {card.hint}</p>}
-          </div>
-          <div className="flex gap-1 shrink-0">
-            <button onClick={onEdit} className="text-xs px-2 py-1 rounded-lg" style={{ color: "var(--nf-text-3)" }}>Edit</button>
-            <button onClick={onRemove} className="text-xs px-2 py-1 rounded-lg" style={{ color: "var(--nf-error-text)" }}>✕</button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function MCQPreview({ card, index, onRemove }: { card: MCQ; index: number; onRemove: () => void }) {
-  return (
-    <div className="rounded-xl p-4" style={{ background: "var(--nf-card-alt)", border: "1px solid var(--nf-border)" }}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <span className="nf-badge nf-badge-mcq text-xs">MCQ {index + 1}</span>
-          <p className="text-sm mt-1 font-medium" style={{ color: "var(--nf-text)" }}>{card.question}</p>
-          <div className="mt-2 grid grid-cols-2 gap-1">
-            {Object.entries(card.options).map(([k, v]) => (
-              <div key={k} className="text-xs px-2 py-1 rounded" style={{
-                background: k === card.correct_option ? "var(--nf-correct-bg)" : "var(--nf-input-bg)",
-                color: k === card.correct_option ? "var(--nf-correct-text)" : "var(--nf-text-3)",
-                border: `1px solid ${k === card.correct_option ? "var(--nf-correct-border)" : "var(--nf-input-border)"}`,
-              }}>
-                <span className="font-medium">{k}.</span> {v}
-              </div>
-            ))}
-          </div>
-        </div>
-        <button onClick={onRemove} className="text-xs px-2 py-1 rounded-lg shrink-0" style={{ color: "var(--nf-error-text)" }}>✕</button>
-      </div>
+    <div>
+      <p className="text-xs uppercase tracking-wider mb-1" style={{ color: "var(--nf-text-3)" }}>{label}</p>
+      {multiline
+        ? <textarea rows={2} value={value} onChange={(e) => onChange(e.target.value)} className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none" style={s} />
+        : <input type="text" value={value} onChange={(e) => onChange(e.target.value)} className="w-full px-3 py-2 rounded-lg text-sm outline-none" style={s} />
+      }
     </div>
   );
 }
