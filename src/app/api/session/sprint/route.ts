@@ -9,8 +9,14 @@ export async function GET(req: NextRequest) {
   const user = await getAuthUser(req);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const { searchParams } = new URL(req.url);
+  const simulateDate = searchParams.get("simulate_date");
+
   const threshold = 0.7;
-  const now = new Date();
+  let now = new Date();
+  if (simulateDate) {
+    try { now = new Date(simulateDate + "T23:59:59.999Z"); } catch {}
+  }
 
   const allStates = await prisma.cardMemoryState.findMany({
     where: { userId: user.id, lastReviewedAt: { not: null } },

@@ -137,6 +137,24 @@ export default function CardsPage() {
     }
   }
 
+  async function handleToggleVerified(card: Card) {
+    const token = localStorage.getItem("nf_token");
+    if (!token) return;
+    const newVerified = !card.verified;
+    // Optimistic update
+    setAllCards(prev => prev.map(c => c.id === card.id ? { ...c, verified: newVerified } : c));
+    try {
+      await fetch(`/api/cards/${card.id}`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ verified: newVerified }),
+      });
+    } catch {
+      // Revert on failure
+      setAllCards(prev => prev.map(c => c.id === card.id ? { ...c, verified: card.verified } : c));
+    }
+  }
+
   function openEdit(card: Card) {
     setEditCard(card);
     setEditForm({
@@ -235,6 +253,7 @@ export default function CardsPage() {
                 onEdit={() => openEdit(card)}
                 onDelete={() => handleDelete(card.id)}
                 deleting={deleting === card.id}
+                onToggleVerified={() => handleToggleVerified(card)}
               />
             ))}
           </div>
@@ -297,7 +316,7 @@ export default function CardsPage() {
   );
 }
 
-function CardItem({ card, onEdit, onDelete, deleting }: { card: Card; onEdit: () => void; onDelete: () => void; deleting: boolean }) {
+function CardItem({ card, onEdit, onDelete, deleting, onToggleVerified }: { card: Card; onEdit: () => void; onDelete: () => void; deleting: boolean; onToggleVerified: () => void }) {
   const statusColors: Record<string, string> = {
     new: "nf-badge-new", due: "nf-badge-due", weak: "nf-badge-weak", strong: "nf-badge-strong"
   };
@@ -311,6 +330,11 @@ function CardItem({ card, onEdit, onDelete, deleting }: { card: Card; onEdit: ()
             {card.card_type === "flashcard" ? "Flashcard" : "MCQ"}
           </span>
           <span className={`nf-badge ${statusColors[card.status] || "nf-badge-new"}`}>{card.status}</span>
+          <button onClick={(e) => { e.stopPropagation(); onToggleVerified(); }}
+            className={`nf-badge ${card.verified ? "nf-badge-verified" : "nf-badge-new"}`}
+            style={{ cursor: "pointer", border: "none" }}>
+            {card.verified ? "✓ Verified" : "Verify"}
+          </button>
         </div>
         <span className="text-sm font-bold shrink-0" style={{ color: retColor }}>{card.retention_pct}%</span>
       </div>

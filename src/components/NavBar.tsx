@@ -1,13 +1,48 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, createContext, useContext } from "react";
 import { Icon } from "@iconify/react";
 
 interface UserForm {
   name: string;
   exam_name: string;
   exam_date: string;
+}
+
+// Time travel context so any page can read the simulated date
+const TimeTravelContext = createContext<{ simulateDate: string | null; setSimulateDate: (d: string | null) => void; ready: boolean }>({ simulateDate: null, setSimulateDate: () => {}, ready: false });
+
+export function useTimeTravel() {
+  return useContext(TimeTravelContext);
+}
+
+export function TimeTravelProvider({ children }: { children: React.ReactNode }) {
+  const [simulateDate, setSimulateDateState] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
+
+  // Read from sessionStorage on client mount, then mark ready
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem("nf_time_travel");
+      if (saved) setSimulateDateState(saved);
+    } catch { /* ignore */ }
+    setReady(true);
+  }, []);
+
+  function setSimulateDate(d: string | null) {
+    setSimulateDateState(d);
+    try {
+      if (d) sessionStorage.setItem("nf_time_travel", d);
+      else sessionStorage.removeItem("nf_time_travel");
+    } catch { /* ignore */ }
+  }
+
+  return (
+    <TimeTravelContext.Provider value={{ simulateDate, setSimulateDate, ready }}>
+      {children}
+    </TimeTravelContext.Provider>
+  );
 }
 
 export default function NavBar() {
@@ -22,6 +57,9 @@ export default function NavBar() {
   const [settingsError, setSettingsError] = useState("");
   const [showStreak, setShowStreak] = useState(false);
   const [streakData, setStreakData] = useState<{ streak_days: number; longest_streak: number; total_review_days: number; reviews_today: number } | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { simulateDate, setSimulateDate } = useTimeTravel();
+  const [timeTravelInput, setTimeTravelInput] = useState("");
 
   useEffect(() => {
     const isDark = document.documentElement.classList.contains("dark");
@@ -32,13 +70,21 @@ export default function NavBar() {
     setDoneToday(done === new Date().toDateString());
   }, []);
 
-  // Re-read streak + done state whenever pathname changes
   useEffect(() => {
     const s = localStorage.getItem("nf_streak");
     if (s) setStreak(Number(s) || 0);
     const done = localStorage.getItem("nf_done_today");
     setDoneToday(done === new Date().toDateString());
   }, [pathname]);
+
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [pathname]);
+
+  // Sync time travel input with context
+  useEffect(() => {
+    setTimeTravelInput(simulateDate || "");
+  }, [simulateDate]);
 
   function toggleTheme() {
     const isDark = !document.documentElement.classList.contains("dark");
@@ -48,8 +94,8 @@ export default function NavBar() {
   }
 
   async function openSettings() {
+    setSidebarOpen(false);
     setSettingsError("");
-    // Fetch current user data
     const token = localStorage.getItem("nf_token");
     if (!token) { router.push("/login"); return; }
     try {
@@ -122,9 +168,29 @@ export default function NavBar() {
     localStorage.removeItem("nf_token");
     localStorage.removeItem("nf_user");
     localStorage.removeItem("nf_streak");
+    setSidebarOpen(false);
     router.push("/login");
   }
 
+  function navigateTo(path: string) {
+    setSidebarOpen(false);
+    router.push(path);
+  }
+
+  function applyTimeTravel() {
+    if (timeTravelInput) {
+      setSimulateDate(timeTravelInput);
+    }
+    setSidebarOpen(false);
+  }
+
+  function resetTimeTravel() {
+    setSimulateDate(null);
+    setTimeTravelInput("");
+    setSidebarOpen(false);
+  }
+
+  const isHome = pathname === "/";
   const isAnalytics = pathname === "/analytics";
   const isCards = pathname === "/cards";
   const isLibrary = pathname === "/library";
@@ -143,6 +209,13 @@ export default function NavBar() {
     transition: "background 0.15s",
     padding: 0,
   });
+
+  const navItems = [
+    { label: "Home", icon: "hugeicons:home-04", path: "/", active: isHome },
+    { label: "Analytics", icon: "hugeicons:analytics-01", path: "/analytics", active: isAnalytics },
+    { label: "Cards", icon: "hugeicons:flash-card", path: "/cards", active: isCards },
+    { label: "My Library", icon: "hugeicons:library", path: "/library", active: isLibrary },
+  ];
 
   return (
     <>
@@ -164,36 +237,64 @@ export default function NavBar() {
             justifyContent: "space-between",
           }}
         >
-          {/* Logo */}
-          <Link href="/" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none", flexShrink: 0 }}>
-            <div
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: 7,
-                background: "linear-gradient(135deg, #3955d4 0%, #6c47ff 100%)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-              }}
-            >
-              <span style={{ color: "#f0c040", fontSize: 17, fontWeight: 900, lineHeight: 1, marginTop: -1 }}>∞</span>
-            </div>
-            <span
-              style={{
-                fontFamily: "'Poppins', sans-serif",
-                fontSize: "1.1rem",
-                fontWeight: 700,
-                color: "var(--nf-text-3)",
-              }}
-            >
-              NeverForget
-            </span>
-          </Link>
-
-          {/* Right icons */}
+          {/* Left: burger + logo */}
           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            {/* Burger menu */}
+            <button
+              style={iconBtn(false)}
+              title="Menu"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <Icon icon="hugeicons:menu-02" width={20} />
+            </button>
+
+            <Link href="/" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none", flexShrink: 0 }}>
+              <div
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 7,
+                  background: "linear-gradient(135deg, #3955d4 0%, #6c47ff 100%)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <span style={{ color: "#fff", fontSize: 12, fontWeight: 800, lineHeight: 1, fontFamily: "'Poppins', sans-serif", letterSpacing: "-0.05em" }}>NF</span>
+              </div>
+              <span
+                style={{
+                  fontFamily: "'Poppins', sans-serif",
+                  fontSize: "1.1rem",
+                  fontWeight: 700,
+                  color: "var(--nf-text-3)",
+                }}
+              >
+                NeverForget
+              </span>
+            </Link>
+          </div>
+
+          {/* Right: time travel indicator + streak + theme */}
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            {/* Time travel indicator */}
+            {simulateDate && (
+              <button
+                onClick={() => { setSidebarOpen(true); }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 5,
+                  padding: "4px 10px", borderRadius: 999, border: "1.5px solid var(--nf-warning-border)",
+                  background: "var(--nf-warning-bg)", color: "var(--nf-warning-text)",
+                  fontSize: "0.7rem", fontWeight: 600, cursor: "pointer",
+                  fontFamily: "'Poppins', sans-serif",
+                }}
+                title="Time traveling"
+              >
+                <Icon icon="hugeicons:time-02" width={13} />
+                {simulateDate}
+              </button>
+            )}
 
             {/* Streak */}
             <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -231,7 +332,7 @@ export default function NavBar() {
               )}
             </div>
 
-            {/* Reviewed today — only visible when daily session is complete */}
+            {/* Reviewed today */}
             {doneToday && (
               <button
                 style={iconBtn(false)}
@@ -241,33 +342,6 @@ export default function NavBar() {
                 <Icon icon="hugeicons:checkmark-badge-01" width={18} />
               </button>
             )}
-
-            {/* Analytics */}
-            <button
-              style={iconBtn(isAnalytics)}
-              title="Analytics"
-              onClick={() => router.push("/analytics")}
-            >
-              <Icon icon="hugeicons:analytics-01" width={18} />
-            </button>
-
-            {/* Cards / Library */}
-            <button
-              style={iconBtn(isLibrary || isCards)}
-              title="My Cards"
-              onClick={() => router.push("/library")}
-            >
-              <Icon icon="hugeicons:library" width={18} />
-            </button>
-
-            {/* Settings */}
-            <button
-              style={iconBtn(false)}
-              title="Settings"
-              onClick={openSettings}
-            >
-              <Icon icon="hugeicons:settings-01" width={18} />
-            </button>
 
             {/* Dark mode toggle */}
             <button
@@ -280,6 +354,219 @@ export default function NavBar() {
           </div>
         </div>
       </nav>
+
+      {/* ── Sidebar overlay (LEFT side) ── */}
+      {sidebarOpen && (
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setSidebarOpen(false); }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 100,
+            background: "var(--nf-overlay)",
+            backdropFilter: "blur(4px)",
+            WebkitBackdropFilter: "blur(4px)",
+            animation: "qmFadeIn 0.14s ease",
+          }}
+        >
+          {/* Sidebar panel — left side */}
+          <div
+            className="nf-sidebar-enter"
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              bottom: 0,
+              width: 290,
+              maxWidth: "85vw",
+              background: "var(--nf-card)",
+              borderRight: "1px solid var(--nf-border)",
+              boxShadow: "8px 0 40px rgba(0,0,0,0.15)",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+            }}
+          >
+            {/* Sidebar header */}
+            <div style={{ padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--nf-border)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 24, height: 24, borderRadius: 6, background: "linear-gradient(135deg, #3955d4 0%, #6c47ff 100%)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <span style={{ color: "#fff", fontSize: 10, fontWeight: 800, lineHeight: 1, fontFamily: "'Poppins', sans-serif", letterSpacing: "-0.05em" }}>NF</span>
+                </div>
+                <span style={{ fontFamily: "'Poppins', sans-serif", fontSize: "0.95rem", fontWeight: 600, color: "var(--nf-text)" }}>
+                  NeverForget
+                </span>
+              </div>
+              <button
+                onClick={() => setSidebarOpen(false)}
+                style={{
+                  width: 32, height: 32, borderRadius: 10, border: "none",
+                  background: "transparent", color: "var(--nf-text-3)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  cursor: "pointer",
+                }}
+              >
+                <Icon icon="hugeicons:cancel-01" width={16} />
+              </button>
+            </div>
+
+            {/* Nav items */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "12px 12px" }}>
+              {navItems.map((item) => (
+                <button
+                  key={item.path}
+                  onClick={() => navigateTo(item.path)}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                    padding: "12px 14px",
+                    borderRadius: 12,
+                    border: "none",
+                    cursor: "pointer",
+                    background: item.active ? "var(--nf-primary-soft)" : "transparent",
+                    color: item.active ? "var(--nf-primary)" : "var(--nf-text-2)",
+                    fontSize: "0.9rem",
+                    fontWeight: item.active ? 600 : 500,
+                    fontFamily: "'Poppins', sans-serif",
+                    textAlign: "left",
+                    marginBottom: 2,
+                    transition: "background 0.15s, color 0.15s",
+                  }}
+                >
+                  <Icon icon={item.icon} width={20} />
+                  {item.label}
+                </button>
+              ))}
+
+              <div style={{ height: 1, background: "var(--nf-border)", margin: "12px 14px" }} />
+
+              {/* Settings */}
+              <button
+                onClick={openSettings}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  border: "none",
+                  cursor: "pointer",
+                  background: "transparent",
+                  color: "var(--nf-text-2)",
+                  fontSize: "0.9rem",
+                  fontWeight: 500,
+                  fontFamily: "'Poppins', sans-serif",
+                  textAlign: "left",
+                  marginBottom: 2,
+                }}
+              >
+                <Icon icon="hugeicons:settings-01" width={20} />
+                Settings
+              </button>
+
+              <div style={{ height: 1, background: "var(--nf-border)", margin: "12px 14px" }} />
+
+              {/* Time Travel */}
+              <div style={{ padding: "8px 14px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <Icon icon="hugeicons:time-02" width={18} style={{ color: "var(--nf-text-3)" }} />
+                  <span style={{ fontFamily: "'Poppins', sans-serif", fontSize: "0.82rem", fontWeight: 600, color: "var(--nf-text-2)" }}>
+                    Time Travel
+                  </span>
+                </div>
+                <p style={{ fontSize: "0.72rem", color: "var(--nf-text-4)", margin: "0 0 10px", lineHeight: 1.45 }}>
+                  Jump to a future date to preview which cards will be due.
+                </p>
+                <input
+                  type="date"
+                  value={timeTravelInput}
+                  onChange={(e) => setTimeTravelInput(e.target.value)}
+                  style={{
+                    width: "100%",
+                    background: "var(--nf-input-bg)",
+                    border: "1.5px solid var(--nf-input-border)",
+                    borderRadius: 10,
+                    padding: "10px 12px",
+                    fontSize: "0.82rem",
+                    color: "var(--nf-text)",
+                    outline: "none",
+                    boxSizing: "border-box",
+                    marginBottom: 8,
+                  }}
+                />
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    onClick={applyTimeTravel}
+                    disabled={!timeTravelInput}
+                    style={{
+                      flex: 1,
+                      padding: "9px 12px",
+                      borderRadius: 10,
+                      border: "none",
+                      background: timeTravelInput ? "var(--nf-primary)" : "var(--nf-input-bg)",
+                      color: timeTravelInput ? "#fff" : "var(--nf-text-4)",
+                      fontSize: "0.8rem",
+                      fontWeight: 600,
+                      cursor: timeTravelInput ? "pointer" : "not-allowed",
+                      fontFamily: "'Poppins', sans-serif",
+                    }}
+                  >
+                    Jump
+                  </button>
+                  {simulateDate && (
+                    <button
+                      onClick={resetTimeTravel}
+                      style={{
+                        flex: 1,
+                        padding: "9px 12px",
+                        borderRadius: 10,
+                        border: "1.5px solid var(--nf-border)",
+                        background: "transparent",
+                        color: "var(--nf-text-2)",
+                        fontSize: "0.8rem",
+                        fontWeight: 500,
+                        cursor: "pointer",
+                        fontFamily: "'Poppins', sans-serif",
+                      }}
+                    >
+                      Back to today
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Sidebar footer: sign out */}
+            <div style={{ padding: "12px 12px 20px", borderTop: "1px solid var(--nf-border)" }}>
+              <button
+                onClick={signOut}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  border: "none",
+                  cursor: "pointer",
+                  background: "var(--nf-error-bg)",
+                  color: "var(--nf-error-text)",
+                  fontSize: "0.88rem",
+                  fontWeight: 500,
+                  fontFamily: "'Poppins', sans-serif",
+                }}
+              >
+                <Icon icon="hugeicons:logout-03" width={16} />
+                Sign out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Settings Modal */}
       {showSettings && (
@@ -389,33 +676,6 @@ export default function NavBar() {
               }}
             >
               {saving ? "Saving…" : "Save Changes"}
-            </button>
-
-            <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "18px 0 4px" }}>
-              <div style={{ flex: 1, height: 1, background: "var(--nf-border)" }} />
-              <span style={{ fontSize: "0.75rem", color: "var(--nf-text-4)" }}>or</span>
-              <div style={{ flex: 1, height: 1, background: "var(--nf-border)" }} />
-            </div>
-
-            <button
-              onClick={signOut}
-              style={{
-                width: "100%",
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                color: "var(--nf-error-text)",
-                fontSize: "0.9rem",
-                fontWeight: 500,
-                padding: "10px 0",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-              }}
-            >
-              <Icon icon="hugeicons:logout-03" width={16} />
-              Sign out
             </button>
           </div>
         </div>

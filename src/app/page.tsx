@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import NavBar from "@/components/NavBar";
+import NavBar, { useTimeTravel } from "@/components/NavBar";
 import { Icon } from "@iconify/react";
 
 interface SubjectCoverage {
@@ -38,6 +38,7 @@ function getGreeting(): string {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { simulateDate, ready } = useTimeTravel();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<ModalType>(null);
@@ -51,7 +52,8 @@ export default function DashboardPage() {
     if (!token) { router.push("/login"); return; }
     setLoading(true);
     try {
-      const res = await fetch("/api/dashboard", {
+      const url = simulateDate ? `/api/dashboard?simulate_date=${simulateDate}` : "/api/dashboard";
+      const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.status === 401) {
@@ -68,13 +70,13 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [router]);
+  }, [router, simulateDate]);
 
   useEffect(() => {
     const saved = localStorage.getItem("nf_theme");
     document.documentElement.classList.toggle("dark", saved === "dark");
-    fetchDashboard();
-  }, [fetchDashboard]);
+    if (ready) fetchDashboard();
+  }, [fetchDashboard, ready]);
 
   // Mark today as done so NavBar can show the history icon
   useEffect(() => {

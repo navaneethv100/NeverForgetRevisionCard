@@ -235,6 +235,13 @@ textarea:focus {
   100% { transform: scale(1); opacity: 1; }
 }
 
+/* ── Sidebar slide-in (from left) ── */
+@keyframes nf-sidebar-enter {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+.nf-sidebar-enter { animation: nf-sidebar-enter 0.22s cubic-bezier(0, 0, 0.2, 1) forwards; }
+
 /* ── Card flip ── */
 .nf-flip-container {
   perspective: 1200px;

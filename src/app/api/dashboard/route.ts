@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
   if (simulateDate) {
     try {
       simDate = new Date(simulateDate);
-      simNow = new Date(simulateDate + "T00:00:00.000Z");
+      simNow = new Date(simulateDate + "T23:59:59.999Z");
     } catch {
       simDate = new Date();
       simNow = new Date();

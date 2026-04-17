@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import NavBar from "@/components/NavBar";
+import NavBar, { useTimeTravel } from "@/components/NavBar";
 import { Suspense } from "react";
 import { Icon } from "@iconify/react";
 
@@ -32,6 +32,7 @@ function SessionContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isSprint = searchParams.get("mode") === "sprint";
+  const { simulateDate, ready } = useTimeTravel();
 
   const [cards, setCards] = useState<SessionCard[]>([]);
   const [currentIdx, setCurrentIdx] = useState(0);
@@ -68,7 +69,8 @@ function SessionContent() {
     if (!token) { router.push("/login"); return; }
     setLoading(true);
     try {
-      const endpoint = isSprint ? "/api/session/sprint" : "/api/session/today";
+      const base = isSprint ? "/api/session/sprint" : "/api/session/today";
+      const endpoint = simulateDate ? `${base}?simulate_date=${simulateDate}` : base;
       const res = await fetch(endpoint, { headers: { Authorization: `Bearer ${token}` } });
       if (res.status === 401) { localStorage.removeItem("nf_token"); localStorage.removeItem("nf_user"); router.push("/login"); return; }
       const data = await res.json();
@@ -76,13 +78,13 @@ function SessionContent() {
     } finally {
       setLoading(false);
     }
-  }, [router, isSprint]);
+  }, [router, isSprint, simulateDate]);
 
   useEffect(() => {
     const saved = localStorage.getItem("nf_theme");
     document.documentElement.classList.toggle("dark", saved === "dark");
-    fetchSession();
-  }, [fetchSession]);
+    if (ready) fetchSession();
+  }, [fetchSession, ready]);
 
   useEffect(() => {
     setStartTime(Date.now());
@@ -263,6 +265,7 @@ function SessionContent() {
   }
 
   const card = cards[currentIdx];
+  if (!card) return <LoadingScreen />;
   const progress = Math.round((currentIdx / cards.length) * 100);
   const isFlashcard = card.card_type === "flashcard";
   const hasNext1 = currentIdx + 1 < cards.length;
@@ -377,56 +380,84 @@ function SessionContent() {
               </div>
             </div>
           ) : (
-            /* ── MCQ card (no flip) ── */
+            /* ── MCQ card with flip animation ── */
             <div
               key={cardKey}
               className={exiting ? "nf-card-exit" : "nf-card-enter"}
-              style={{ position: "relative", zIndex: 10, borderRadius: 22, padding: "24px 24px 28px", background: "var(--nf-card)", border: "2px solid var(--nf-border)", boxShadow: "0 8px 40px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)", height: "100%", display: "flex", flexDirection: "column", overflow: "hidden auto", boxSizing: "border-box" }}
+              style={{ position: "relative", zIndex: 10, height: "100%" }}
             >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 }}>
-                <span style={{ fontSize: "0.72rem", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--nf-text-4)" }}>
-                  {card.subject}
-                </span>
-                {card.hint && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setShowHint((s) => !s); }}
-                    style={{ width: 30, height: 30, borderRadius: 9, border: `1.5px solid ${showHint ? "var(--nf-info-border)" : "var(--nf-border)"}`, background: showHint ? "var(--nf-info-bg)" : "transparent", color: showHint ? "var(--nf-info-text)" : "var(--nf-text-3)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "all 0.15s" }}
-                  >
-                    <Icon icon="hugeicons:idea-01" width={15} />
-                  </button>
-                )}
-              </div>
-              {showHint && card.hint && (
-                <div className="nf-fadein-up" style={{ fontSize: "0.82rem", lineHeight: 1.55, padding: "10px 14px", borderRadius: 10, marginBottom: 20, background: "var(--nf-info-bg)", color: "var(--nf-info-text)", border: "1px solid var(--nf-info-border)", textAlign: "center" }}>
-                  {card.hint}
-                </div>
-              )}
-              <p style={{ fontFamily: "'Poppins', sans-serif", fontSize: "clamp(1rem, 3vw, 1.15rem)", fontWeight: 500, lineHeight: 1.55, color: "var(--nf-text)", margin: 0, textAlign: "center", flex: 1, display: "flex", alignItems: "center", justifyContent: "center", letterSpacing: "-0.01em" }}>
-                {card.front}
-              </p>
-              <div style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 8 }}>
-                {Object.entries(card.options || {}).map(([key, val]) => {
-                  let s: React.CSSProperties = { background: "transparent", border: "1.5px solid var(--nf-border)", color: "var(--nf-text)" };
-                  if (selectedOption) {
-                    if (key === card.correct_option) s = { background: "transparent", border: "2px solid var(--nf-correct-border)", color: "var(--nf-correct-text)" };
-                    else if (key === selectedOption) s = { background: "transparent", border: "2px solid var(--nf-wrong-border)", color: "var(--nf-wrong-text)" };
-                  }
-                  return (
-                    <button key={key} disabled={!!selectedOption}
-                      onClick={() => handleOptionSelect(key)}
-                      style={{ ...s, width: "100%", textAlign: "left", padding: "11px 16px", borderRadius: 12, fontSize: "0.875rem", cursor: selectedOption ? "default" : "pointer", display: "flex", alignItems: "center", gap: 10, fontFamily: "'Lato', sans-serif" }}>
-                      <span style={{ fontWeight: 700, flexShrink: 0, fontFamily: "'Poppins', sans-serif" }}>{key}.</span>
-                      <span style={{ flex: 1 }}>{val}</span>
-                      {selectedOption && key === card.correct_option && <Icon icon="hugeicons:checkmark-circle-01" width={16} style={{ flexShrink: 0 }} />}
-                      {selectedOption && key === selectedOption && key !== card.correct_option && <Icon icon="hugeicons:cancel-circle" width={16} style={{ flexShrink: 0 }} />}
-                    </button>
-                  );
-                })}
-                {showAnswer && card.explanation && (
-                  <div className="nf-fadein-up" style={{ padding: "13px 16px", borderRadius: 12, fontSize: "0.85rem", lineHeight: 1.55, color: "var(--nf-text-2)", border: "1px solid var(--nf-border)", marginTop: 4 }}>
-                    <span style={{ fontWeight: 700 }}>Explanation: </span>{card.explanation}
+              <div className="nf-flip-container">
+                <div className={`nf-flip-inner${showAnswer ? " flipped" : ""}`}>
+                  {/* Front — Question + Options */}
+                  <div className="nf-flip-front" style={{ padding: "24px 24px 28px", background: "var(--nf-card)", border: "2px solid var(--nf-border)", boxShadow: "0 8px 40px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+                      <span style={{ fontSize: "0.72rem", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--nf-text-4)" }}>
+                        {card.subject}
+                      </span>
+                      {card.hint && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setShowHint((s) => !s); }}
+                          style={{ width: 30, height: 30, borderRadius: 9, border: `1.5px solid ${showHint ? "var(--nf-info-border)" : "var(--nf-border)"}`, background: showHint ? "var(--nf-info-bg)" : "transparent", color: showHint ? "var(--nf-info-text)" : "var(--nf-text-3)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "all 0.15s" }}
+                        >
+                          <Icon icon="hugeicons:idea-01" width={15} />
+                        </button>
+                      )}
+                    </div>
+                    {showHint && card.hint && (
+                      <div className="nf-fadein-up" style={{ fontSize: "0.82rem", lineHeight: 1.55, padding: "10px 14px", borderRadius: 10, marginBottom: 16, background: "var(--nf-info-bg)", color: "var(--nf-info-text)", border: "1px solid var(--nf-info-border)", textAlign: "center" }}>
+                        {card.hint}
+                      </div>
+                    )}
+                    <p style={{ fontFamily: "'Poppins', sans-serif", fontSize: "clamp(0.9rem, 2.5vw, 1.05rem)", fontWeight: 500, lineHeight: 1.5, color: "var(--nf-text)", margin: "0 0 20px", textAlign: "center", letterSpacing: "-0.01em" }}>
+                      {card.front}
+                    </p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {Object.entries(card.options || {}).map(([key, val]) => (
+                        <button key={key} disabled={!!selectedOption}
+                          onClick={() => handleOptionSelect(key)}
+                          style={{ background: "transparent", border: "1.5px solid var(--nf-border)", color: "var(--nf-text)", width: "100%", textAlign: "left", padding: "11px 16px", borderRadius: 12, fontSize: "0.875rem", cursor: selectedOption ? "default" : "pointer", display: "flex", alignItems: "center", gap: 10, fontFamily: "'Lato', sans-serif" }}>
+                          <span style={{ fontWeight: 700, flexShrink: 0, fontFamily: "'Poppins', sans-serif" }}>{key}.</span>
+                          <span style={{ flex: 1 }}>{val}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                )}
+
+                  {/* Back — Result + Explanation */}
+                  <div className="nf-flip-back" style={{ padding: "24px 24px 28px", background: "var(--nf-card)", border: "2px solid var(--nf-border)", boxShadow: "0 8px 40px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+                      <span style={{ fontSize: "0.72rem", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--nf-text-4)" }}>
+                        {card.subject}
+                      </span>
+                      <span style={{ fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: mcqResult === "correct" ? "var(--nf-correct-text)" : "var(--nf-wrong-text)", background: mcqResult === "correct" ? "var(--nf-correct-bg)" : "var(--nf-wrong-bg)", padding: "4px 10px", borderRadius: 8 }}>
+                        {mcqResult === "correct" ? "Correct" : "Wrong"}
+                      </span>
+                    </div>
+                    <p style={{ fontFamily: "'Poppins', sans-serif", fontSize: "clamp(0.82rem, 2.2vw, 0.92rem)", fontWeight: 500, lineHeight: 1.45, color: "var(--nf-text-3)", margin: "0 0 16px", textAlign: "center", letterSpacing: "-0.01em" }}>
+                      {card.front}
+                    </p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: card.explanation ? 16 : 0 }}>
+                      {Object.entries(card.options || {}).map(([key, val]) => {
+                        let optStyle: React.CSSProperties = { background: "transparent", border: "1.5px solid var(--nf-border)", color: "var(--nf-text-3)" };
+                        if (key === card.correct_option) optStyle = { background: "transparent", border: "2px solid var(--nf-correct-border)", color: "var(--nf-correct-text)" };
+                        else if (key === selectedOption) optStyle = { background: "transparent", border: "2px solid var(--nf-wrong-border)", color: "var(--nf-wrong-text)" };
+                        return (
+                          <div key={key} style={{ ...optStyle, padding: "10px 14px", borderRadius: 12, fontSize: "0.84rem", display: "flex", alignItems: "center", gap: 10, fontFamily: "'Lato', sans-serif" }}>
+                            <span style={{ fontWeight: 700, flexShrink: 0, fontFamily: "'Poppins', sans-serif" }}>{key}.</span>
+                            <span style={{ flex: 1 }}>{val}</span>
+                            {key === card.correct_option && <Icon icon="hugeicons:checkmark-circle-01" width={15} style={{ flexShrink: 0 }} />}
+                            {key === selectedOption && key !== card.correct_option && <Icon icon="hugeicons:cancel-circle" width={15} style={{ flexShrink: 0 }} />}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {card.explanation && (
+                      <div style={{ padding: "12px 14px", borderRadius: 12, fontSize: "0.84rem", lineHeight: 1.55, color: "var(--nf-text-2)", border: "1px solid var(--nf-border)", background: "var(--nf-input-bg)" }}>
+                        <span style={{ fontWeight: 700 }}>Explanation: </span>{card.explanation}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           )}

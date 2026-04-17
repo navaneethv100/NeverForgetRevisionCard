@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import NavBar from "@/components/NavBar";
+import NavBar, { useTimeTravel } from "@/components/NavBar";
 import { Icon } from "@iconify/react";
 
 interface SubjectCoverage {
@@ -85,6 +85,7 @@ function StatCard({
 
 export default function AnalyticsPage() {
   const router = useRouter();
+  const { simulateDate, ready } = useTimeTravel();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -93,7 +94,8 @@ export default function AnalyticsPage() {
     if (!token) { router.push("/login"); return; }
     setLoading(true);
     try {
-      const res = await fetch("/api/dashboard", {
+      const url = simulateDate ? `/api/dashboard?simulate_date=${simulateDate}` : "/api/dashboard";
+      const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.status === 401) {
@@ -110,13 +112,13 @@ export default function AnalyticsPage() {
     } finally {
       setLoading(false);
     }
-  }, [router]);
+  }, [router, simulateDate]);
 
   useEffect(() => {
     const saved = localStorage.getItem("nf_theme");
     document.documentElement.classList.toggle("dark", saved === "dark");
-    fetchData();
-  }, [fetchData]);
+    if (ready) fetchData();
+  }, [fetchData, ready]);
 
   // Contextual tip
   let showTip = false;
