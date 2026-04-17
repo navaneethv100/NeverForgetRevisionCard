@@ -1,8 +1,7 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import NavBar from "@/components/NavBar";
-import { UPSC_SYLLABUS_CLIENT } from "@/lib/syllabus-client";
 
 interface Card {
   id: number;
@@ -25,10 +24,8 @@ interface Card {
 
 export default function CardsPage() {
   const router = useRouter();
-  const [cards, setCards] = useState<Card[]>([]);
+  const [allCards, setAllCards] = useState<Card[]>([]);
   const [loading, setLoading] = useState(true);
-  const [subjects, setSubjects] = useState<string[]>([]);
-  const [topics, setTopics] = useState<string[]>([]);
   const [filters, setFilters] = useState({ subject: "", topic: "", status: "", search: "", sort: "newest" });
   const [editCard, setEditCard] = useState<Card | null>(null);
   const [editForm, setEditForm] = useState<Partial<Card>>({});
@@ -37,45 +34,66 @@ export default function CardsPage() {
 
   const token = typeof window !== "undefined" ? localStorage.getItem("nf_token") : null;
 
+  // Fetch all cards once — filtering is done client-side
   const fetchCards = useCallback(async () => {
     if (!token) { router.push("/login"); return; }
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (filters.subject) params.set("subject", filters.subject);
-      if (filters.topic) params.set("topic", filters.topic);
-      if (filters.status) params.set("status", filters.status);
-      if (filters.search) params.set("search", filters.search);
-      if (filters.sort) params.set("sort", filters.sort);
-
-      const res = await fetch(`/api/cards?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch("/api/cards", { headers: { Authorization: `Bearer ${token}` } });
       if (res.status === 401) { router.push("/login"); return; }
       const data = await res.json();
-      setCards(data.cards || []);
-      setSubjects(data.subjects || []);
-      setTopics(filters.subject ? (UPSC_SYLLABUS_CLIENT[filters.subject] || []) : []);
+      setAllCards(data.cards || []);
     } finally {
       setLoading(false);
     }
-  }, [token, router, filters]);
+  }, [token, router]);
 
   useEffect(() => {
     const saved = localStorage.getItem("nf_theme");
     document.documentElement.classList.toggle("dark", saved === "dark");
-  }, []);
-
-  useEffect(() => {
     fetchCards();
   }, [fetchCards]);
 
-  useEffect(() => {
-    if (filters.subject) {
-      setTopics(UPSC_SYLLABUS_CLIENT[filters.subject] || []);
-      setFilters((f) => ({ ...f, topic: "" }));
-    } else {
-      setTopics([]);
+  // Derive subjects from actual card data
+  const subjects = useMemo(() =>
+    [...new Set(allCards.map(c => c.subject))].sort(),
+    [allCards]
+  );
+
+  // Derive topics for selected subject from actual card data
+  const topics = useMemo(() =>
+    filters.subject
+      ? [...new Set(allCards.filter(c => c.subject === filters.subject).map(c => c.topic))].sort()
+      : [],
+    [allCards, filters.subject]
+  );
+
+  // Client-side filtering + sorting — instant, no re-fetch
+  const cards = useMemo(() => {
+    let result = [...allCards];
+
+    if (filters.subject) result = result.filter(c => c.subject === filters.subject);
+    if (filters.topic) result = result.filter(c => c.topic === filters.topic);
+    if (filters.status) result = result.filter(c => c.status === filters.status);
+    if (filters.search) {
+      const q = filters.search.toLowerCase();
+      result = result.filter(c =>
+        c.front?.toLowerCase().includes(q) ||
+        c.back?.toLowerCase().includes(q) ||
+        c.concept?.toLowerCase().includes(q)
+      );
     }
-  }, [filters.subject]);
+
+    if (filters.sort === "oldest") {
+      result.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    } else if (filters.sort === "weakest") {
+      result.sort((a, b) => a.retention_pct - b.retention_pct);
+    } else {
+      result.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    }
+
+    return result;
+  }, [allCards, filters]);
 
   async function handleSaveEdit() {
     if (!editCard) return;
@@ -111,7 +129,7 @@ export default function CardsPage() {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
-      setCards((c) => c.filter((card) => card.id !== id));
+      setAllCards(prev => prev.filter(c => c.id !== id));
     } finally {
       setDeleting(null);
     }
@@ -134,32 +152,38 @@ export default function CardsPage() {
     <div style={{ minHeight: "100vh", background: "var(--nf-bg)" }}>
       <NavBar />
       <main className="max-w-5xl mx-auto px-4 py-8 space-y-6">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <h1 className="text-2xl font-bold" style={{ fontFamily: "'Bricolage Grotesque', sans-serif", color: "var(--nf-text)" }}>
-              My Cards
-            </h1>
-            <p className="text-sm mt-0.5" style={{ color: "var(--nf-text-3)" }}>{cards.length} cards</p>
-          </div>
+        <div>
+          <h1 className="text-2xl font-bold" style={{ fontFamily: "'Bricolage Grotesque', sans-serif", color: "var(--nf-text)" }}>
+            My Cards
+          </h1>
+          <p className="text-sm mt-0.5" style={{ color: "var(--nf-text-3)" }}>
+            {loading ? "Loading…" : `${cards.length} of ${allCards.length} cards`}
+          </p>
         </div>
 
         {/* Filters */}
         <div className="rounded-2xl p-4" style={{ background: "var(--nf-card)", border: "1px solid var(--nf-border)" }}>
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-            <select value={filters.subject} onChange={(e) => setFilters({ ...filters, subject: e.target.value })}
-              className="px-3 py-2 rounded-xl text-sm outline-none"
+            <select value={filters.subject}
+              onChange={(e) => setFilters({ ...filters, subject: e.target.value, topic: "" })}
+              className="pl-3 pr-8 py-2 rounded-xl text-sm outline-none"
               style={{ background: "var(--nf-input-bg)", border: "1px solid var(--nf-input-border)", color: "var(--nf-text)" }}>
               <option value="">All Subjects</option>
-              {subjects.map((s) => <option key={s} value={s}>{s}</option>)}
+              {subjects.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
-            <select value={filters.topic} onChange={(e) => setFilters({ ...filters, topic: e.target.value })}
-              className="px-3 py-2 rounded-xl text-sm outline-none" disabled={!filters.subject}
+
+            <select value={filters.topic}
+              onChange={(e) => setFilters({ ...filters, topic: e.target.value })}
+              disabled={!filters.subject}
+              className="pl-3 pr-8 py-2 rounded-xl text-sm outline-none"
               style={{ background: "var(--nf-input-bg)", border: "1px solid var(--nf-input-border)", color: "var(--nf-text)" }}>
               <option value="">All Topics</option>
-              {topics.map((t) => <option key={t} value={t}>{t}</option>)}
+              {topics.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
-            <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-              className="px-3 py-2 rounded-xl text-sm outline-none"
+
+            <select value={filters.status}
+              onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+              className="pl-3 pr-8 py-2 rounded-xl text-sm outline-none"
               style={{ background: "var(--nf-input-bg)", border: "1px solid var(--nf-input-border)", color: "var(--nf-text)" }}>
               <option value="">All Status</option>
               <option value="new">New</option>
@@ -167,13 +191,16 @@ export default function CardsPage() {
               <option value="weak">Weak</option>
               <option value="strong">Strong</option>
             </select>
-            <select value={filters.sort} onChange={(e) => setFilters({ ...filters, sort: e.target.value })}
-              className="px-3 py-2 rounded-xl text-sm outline-none"
+
+            <select value={filters.sort}
+              onChange={(e) => setFilters({ ...filters, sort: e.target.value })}
+              className="pl-3 pr-8 py-2 rounded-xl text-sm outline-none"
               style={{ background: "var(--nf-input-bg)", border: "1px solid var(--nf-input-border)", color: "var(--nf-text)" }}>
               <option value="newest">Newest</option>
               <option value="oldest">Oldest</option>
               <option value="weakest">Weakest</option>
             </select>
+
             <input type="text" placeholder="Search…" value={filters.search}
               onChange={(e) => setFilters({ ...filters, search: e.target.value })}
               className="px-3 py-2 rounded-xl text-sm outline-none"
@@ -185,7 +212,7 @@ export default function CardsPage() {
         {loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[1,2,3,4,5,6].map(i => (
-              <div key={i} className="h-32 rounded-2xl nf-pulse" style={{ background: "var(--nf-card)" }} />
+              <div key={i} className="h-36 rounded-2xl nf-pulse" style={{ background: "var(--nf-card)" }} />
             ))}
           </div>
         ) : cards.length === 0 ? (
@@ -193,12 +220,15 @@ export default function CardsPage() {
             <div className="text-5xl mb-3">📭</div>
             <p className="font-medium" style={{ color: "var(--nf-text)" }}>No cards found</p>
             <p className="text-sm mt-1" style={{ color: "var(--nf-text-3)" }}>
-              <button onClick={() => router.push("/add")} style={{ color: "var(--nf-primary)" }}>Add some content</button> to generate cards.
+              {allCards.length > 0
+                ? "Try adjusting your filters."
+                : <><button onClick={() => router.push("/add")} style={{ color: "var(--nf-primary)" }}>Add some content</button> to generate cards.</>
+              }
             </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {cards.map((card) => (
+            {cards.map(card => (
               <CardItem key={card.id} card={card}
                 onEdit={() => openEdit(card)}
                 onDelete={() => handleDelete(card.id)}
@@ -280,7 +310,7 @@ function CardItem({ card, onEdit, onDelete, deleting }: { card: Card; onEdit: ()
           </span>
           <span className={`nf-badge ${statusColors[card.status] || "nf-badge-new"}`}>{card.status}</span>
         </div>
-        <span className="text-sm font-bold" style={{ color: retColor }}>{card.retention_pct}%</span>
+        <span className="text-sm font-bold shrink-0" style={{ color: retColor }}>{card.retention_pct}%</span>
       </div>
 
       <p className="text-sm font-medium line-clamp-3 flex-1" style={{ color: "var(--nf-text)" }}>
@@ -288,7 +318,11 @@ function CardItem({ card, onEdit, onDelete, deleting }: { card: Card; onEdit: ()
       </p>
 
       <div className="flex items-center justify-between">
-        <span className="text-xs" style={{ color: "var(--nf-text-4)" }}>{card.concept}</span>
+        <span className="text-xs" style={{ color: "var(--nf-text-4)" }}>
+          <span style={{ color: "var(--nf-text-3)" }}>{card.subject}</span>
+          <span className="mx-1">›</span>
+          <span>{card.topic}</span>
+        </span>
         <div className="flex gap-1">
           <button onClick={onEdit} className="text-xs px-2.5 py-1 rounded-lg transition-all"
             style={{ background: "var(--nf-primary-soft)", color: "var(--nf-primary)" }}>Edit</button>

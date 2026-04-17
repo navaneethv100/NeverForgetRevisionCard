@@ -42,8 +42,16 @@ export default function NavBar() {
   return (
     <nav className="sticky top-0 z-50" style={{ background: "var(--nf-card)", borderBottom: "1px solid var(--nf-border)", boxShadow: "var(--nf-shadow-sm)" }}>
       <div className="max-w-5xl mx-auto px-4 h-14 flex items-center gap-6">
-        <Link href="/" className="text-lg font-bold nf-logo shrink-0" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>
-          NeverForget
+        <Link href="/" className="flex items-center gap-2 shrink-0">
+          <div style={{
+            width: 28, height: 28, borderRadius: 7,
+            background: "linear-gradient(135deg, #3955d4 0%, #6c47ff 100%)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            flexShrink: 0,
+          }}>
+            <span style={{ color: "#f0c040", fontSize: 17, fontWeight: 900, lineHeight: 1, marginTop: -1 }}>∞</span>
+          </div>
+          <span className="text-lg font-bold nf-logo" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>NeverForget</span>
         </Link>
 
         <div className="flex items-center gap-1 flex-1">

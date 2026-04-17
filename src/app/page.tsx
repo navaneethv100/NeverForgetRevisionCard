@@ -245,35 +245,22 @@ function StatCard({ label, value, icon, subtitle }: { label: string; value: stri
 }
 
 function SubjectBar({ data }: { data: SubjectCoverage }) {
-  const colors: Record<string, string> = {
-    strong: "var(--nf-bar-strong)",
-    on_track: "var(--nf-bar-on-track)",
-    behind: "var(--nf-bar-behind)",
-    critical: "var(--nf-bar-critical)",
-  };
-  const badgeClass: Record<string, string> = {
-    strong: "nf-badge-strong",
-    on_track: "nf-badge-on-track",
-    behind: "nf-badge-behind",
-    critical: "nf-badge-critical",
-  };
+  const barColor = data.retention_pct >= 70 ? "#10b981" : data.retention_pct >= 40 ? "#f59e0b" : "#ef4444";
+  const pctColor = data.retention_pct >= 70 ? "var(--nf-green-text)" : data.retention_pct >= 40 ? "var(--nf-yellow-text)" : "var(--nf-red-text)";
 
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium" style={{ color: "var(--nf-text)" }}>{data.subject}</span>
-          <span className={`nf-badge ${badgeClass[data.status] || "nf-badge-new"}`}>{data.status.replace("_", " ")}</span>
+          <span className="text-xs" style={{ color: "var(--nf-text-4)" }}>{data.total_cards} cards</span>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-xs" style={{ color: "var(--nf-text-3)" }}>{data.total_cards} cards</span>
-          <span className="text-sm font-semibold" style={{ color: "var(--nf-text-2)" }}>{data.retention_pct}%</span>
-        </div>
+        <span className="text-sm font-semibold" style={{ color: pctColor }}>{data.retention_pct}%</span>
       </div>
       <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--nf-card-alt)" }}>
         <div
           className="h-full rounded-full transition-all duration-500"
-          style={{ width: `${data.retention_pct}%`, background: colors[data.status] || "#ccc" }}
+          style={{ width: `${data.retention_pct}%`, background: barColor }}
         />
       </div>
     </div>
