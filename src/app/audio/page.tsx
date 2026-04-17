@@ -23,7 +23,7 @@ export default function AudioPage() {
   const [progress, setProgress] = useState(0);
   const [speed, setSpeed] = useState(1.5);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const progressInterval = useRef<ReturnType<typeof setInterval>>();
+  const progressInterval = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
 
   useEffect(() => {
     fetchPreview();
