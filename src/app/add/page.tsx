@@ -615,12 +615,24 @@ export default function AddPage() {
 
             {/* Add blank card buttons */}
             <div className="flex gap-2">
-              <button onClick={() => setPreview((p) => p ? { ...p, flashcards: [...p.flashcards, { front: "", hint: "", back: "" }] } : p)}
+              <button onClick={() => {
+                if (!preview) return;
+                const newIdx = preview.flashcards.length;
+                setPreview((p) => p ? { ...p, flashcards: [...p.flashcards, { front: "", hint: "", back: "" }] } : p);
+                setEditForm({ front: "", hint: "", back: "" });
+                setEditIdx({ type: "fc", idx: newIdx });
+              }}
                 className="flex-1 py-2.5 rounded-xl text-sm transition-all"
                 style={{ border: "1px dashed var(--nf-border)", color: "var(--nf-text-3)" }}>
                 + Add Flashcard
               </button>
-              <button onClick={() => setPreview((p) => p ? { ...p, mcqs: [...p.mcqs, { question: "", options: { A: "", B: "", C: "", D: "" }, correct_option: "A", explanation: "" }] } : p)}
+              <button onClick={() => {
+                if (!preview) return;
+                const newIdx = preview.mcqs.length;
+                setPreview((p) => p ? { ...p, mcqs: [...p.mcqs, { question: "", options: { A: "", B: "", C: "", D: "" }, correct_option: "A", explanation: "" }] } : p);
+                setEditForm({ question: "", options: { A: "", B: "", C: "", D: "" }, correct_option: "A", explanation: "" });
+                setEditIdx({ type: "mcq", idx: newIdx });
+              }}
                 className="flex-1 py-2.5 rounded-xl text-sm transition-all"
                 style={{ border: "1px dashed var(--nf-border)", color: "var(--nf-text-3)" }}>
                 + Add MCQ
