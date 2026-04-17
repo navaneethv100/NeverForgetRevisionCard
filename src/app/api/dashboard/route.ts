@@ -3,6 +3,7 @@ import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { calculateRetrievability } from "@/lib/fsrs";
 import { getStreakInfo } from "@/lib/streak-service";
+import { NEW_CARDS_PER_DAY, REVIEW_CARDS_LIMIT } from "@/lib/session-config";
 import { UPSC_SYLLABUS } from "@/lib/ai-service";
 
 export async function GET(req: NextRequest) {
@@ -34,7 +35,7 @@ export async function GET(req: NextRequest) {
 
   // Retention stats
   const stats = await getRetentionStats(user.id, simNow);
-  const dueToday = stats.dueToday + stats.newCards;
+  const dueToday = Math.min(stats.dueToday, REVIEW_CARDS_LIMIT) + stats.newCards;
   const estMinutes = Math.max(1, Math.round(dueToday * 1.1));
 
   // Streak

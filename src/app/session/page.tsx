@@ -101,6 +101,7 @@ function SessionContent() {
     function handleKey(e: KeyboardEvent) {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (exiting) return;
+      if (e.key === "Escape") { router.push("/"); return; }
       if (!showAnswer) {
         if (e.code === "Space") { e.preventDefault(); setShowAnswer(true); }
         return;

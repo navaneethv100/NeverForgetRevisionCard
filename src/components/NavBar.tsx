@@ -213,8 +213,8 @@ export default function NavBar() {
   const navItems = [
     { label: "Home", icon: "hugeicons:home-04", path: "/", active: isHome },
     { label: "Analytics", icon: "hugeicons:analytics-01", path: "/analytics", active: isAnalytics },
-    { label: "Cards", icon: "hugeicons:flash-card", path: "/cards", active: isCards },
-    { label: "My Library", icon: "hugeicons:library", path: "/library", active: isLibrary },
+    { label: "My Cards", icon: "hugeicons:library", path: "/cards", active: isCards },
+    // { label: "My Library", icon: "hugeicons:library", path: "/library", active: isLibrary },
   ];
 
   return (
